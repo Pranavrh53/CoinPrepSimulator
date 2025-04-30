@@ -132,6 +132,7 @@ def get_portfolio():
         ]
     })
 
+
 @bp.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -208,9 +209,9 @@ def start_scheduler():
 if __name__ == '__main__':
     try:
         with app.app_context():
-            db.create_all()  # Ensure tables are created (skip if already done via database.sql)
+            db.create_all()  # Ensure tables are created
+        start_scheduler()
+        print("Server starting on http://127.0.0.1:5000")
+        app.run(debug=True)
     except Exception as e:
-        print(f"Database connection failed: {e}")
-        raise e
-    start_scheduler()
-    app.run(debug=True)
+        print(f"Server failed to start: {e}")

@@ -20,13 +20,14 @@
             e.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
-            fetch('/api/register', {  // Ensure this matches the endpoint
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username, password})
-            })
-            .then(response => response.json())
-            .then(data => {
+            fetch('http://127.0.0.1:5000/api/register', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ username: 'testuser', password: 'testpass' }),
+})
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error('Error:', error));
                 if (data.message) {
                     alert('Registration successful! Please login.');
                     window.location.href = '/login';
