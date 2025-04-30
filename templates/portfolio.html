@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Your Portfolio</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Your Portfolio</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <h2>Add to Portfolio</h2>
+        <form method="POST">
+            <select name="wallet_id" required>
+                {% for wallet in wallets %}
+                    <option value="{{ wallet[0] }}">{{ wallet[1] }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
+            <input type="number" name="amount" placeholder="Amount" step="0.00000001" required>
+            <input type="number" name="purchase_price" placeholder="Purchase Price (USD)" step="0.01" required>
+            <button type="submit">Add</button>
+        </form>
+        <h2>Your Holdings</h2>
+        <table>
+            <tr>
+                <th>Wallet</th>
+                <th>Coin</th>
+                <th>Amount</th>
+                <th>Purchase Price</th>
+                <th>Current Price</th>
+                <th>Profit/Loss</th>
+            </tr>
+            {% for transaction in transactions %}
+            <tr>
+                <td>Wallet {{ transaction.wallet_id }}</td>
+                <td>{{ transaction.coin_id }}</td>
+                <td>{{ transaction.amount }}</td>
+                <td>${{ transaction.price }}</td>
+                <td>${{ current_prices.get(transaction.coin_id, 0) }}</td>
+                <td>${{ (current_prices.get(transaction.coin_id, 0) - transaction.price) * transaction.amount | round(2) }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Risk Tolerance Quiz</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Risk Tolerance Quiz</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="POST">
+            <p>1. How would you react to a 20% drop in your portfolio? (1 = Sell immediately, 5 = Hold long-term)</p>
+            <input type="number" name="q1" min="1" max="5" required>
+            <p>2. What portion of your savings are you willing to invest? (1 = 0-10%, 5 = 50%+)</p>
+            <input type="number" name="q2" min="1" max="5" required>
+            <p>3. How often do you check your investments? (1 = Daily, 5 = Rarely)</p>
+            <input type="number" name="q3" min="1" max="5" required>
+            <p>4. Are you comfortable with volatile markets? (1 = No, 5 = Yes)</p>
+            <input type="number" name="q4" min="1" max="5" required>
+            <p>5. What is your investment horizon? (1 = <1 year, 5 = >10 years)</p>
+            <input type="number" name="q5" min="1" max="5" required>
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+</body>
+</html>

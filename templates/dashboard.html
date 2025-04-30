@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CryptoTracker Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>CryptoTracker Dashboard</h1>
+        <nav>
+            <a href="{{ url_for('portfolio') }}">Portfolio</a>
+            <a href="{{ url_for('watchlist') }}">Watchlist</a>
+            <a href="{{ url_for('alerts') }}">Price Alerts</a>
+            <a href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
+            <a href="{{ url_for('achievements') }}">Achievements</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </nav>
+        <p>CryptoBucks Balance: {{ user.crypto_bucks }}</p>
+        <p>Risk Tolerance: {{ user.risk_tolerance }}</p>
+        <h2>Market Overview</h2>
+        <table>
+            <tr>
+                <th>Coin</th>
+                <th>Price (USD)</th>
+                <th>24h Change</th>
+                <th>Market Cap</th>
+            </tr>
+            {% for coin in coins %}
+            <tr>
+                <td>{{ coin.name }}</td>
+                <td>${{ coin.current_price }}</td>
+                <td>{{ coin.price_change_percentage_24h }}%</td>
+                <td>${{ coin.market_cap }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <canvas id="historicalChart" width="400" height="200"></canvas>
+        <script>
+            fetch('/historical/bitcoin')
+                .then(response => response.json())
+                .then(data => {
+                    new Chart(document.getElementById('historicalChart'), {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'Bitcoin Price (USD)',
+                                data: data.prices,
+                                borderColor: 'blue',
+                                fill: false
+                            }]
+                        },
+                        options: { scales: { y: { beginAtZero: false } } }
+                    });
+                });
+        </script>
+    </div>
+</body>
+</html>
