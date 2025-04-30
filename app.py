@@ -1,317 +1,216 @@
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
-from flask_bcrypt import Bcrypt
-import mysql.connector
-import requests
-import json
-from datetime import datetime, timedelta
-import os
+from flask import Flask, session, jsonify, request, render_template, redirect, url_for, Blueprint
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
 import random
-import string
-import hashlib
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
-bcrypt = Bcrypt(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:Pranavrh123$@localhost/coinprep'  # Replace with your MySQL credentials
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = 'your_secret_key'  # Replace with a secure secret key
 
-# MySQL Configuration
-db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'Pranavrh123$',
-    'database': 'crypto_tracker'
-}
+db = SQLAlchemy(app)
 
-# CoinGecko API
-COINGECKO_API = "https://api.coingecko.com/api/v3"
 
-def get_db_connection():
-    try:
-        return mysql.connector.connect(**db_config)
-    except mysql.connector.Error as err:
-        print(f"Database connection failed: {err}")
-        return None
+# Models
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(120), nullable=False)
+    balance = db.Column(db.Float, default=10000.0)
 
-def generate_verification_code():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+class Stock(db.Model):
+    __tablename__ = 'stocks'
+    id = db.Column(db.Integer, primary_key=True)
+    symbol = db.Column(db.String(10), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    current_price = db.Column(db.Float, nullable=False)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
 
-@app.route('/')
-def index():
-    if 'user_id' in session and session.get('expires_at', 0) > datetime.now().timestamp():
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+class Transaction(db.Model):
+    __tablename__ = 'transactions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    stock_id = db.Column(db.Integer, db.ForeignKey('stocks.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    price_per_share = db.Column(db.Float, nullable=False)
+    transaction_type = db.Column(db.String(10), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-@app.route('/login', methods=['GET', 'POST'])
+# Blueprint for API routes
+bp = Blueprint('api', __name__)
+
+@bp.route('/api/stocks', methods=['GET'])
+def get_stocks():
+    stocks = Stock.query.all()
+    return jsonify([{'id': s.id, 'symbol': s.symbol, 'name': s.name, 'current_price': s.current_price} for s in stocks])
+
+@bp.route('/api/buy', methods=['POST'])
+def buy_stock():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    data = request.get_json()
+    stock_id = data['stock_id']
+    quantity = data['quantity']
+    
+    user = User.query.get(session['user_id'])
+    stock = Stock.query.get(stock_id)
+    
+    if not stock or quantity <= 0:
+        return jsonify({'error': 'Invalid stock or quantity'}), 400
+    
+    total_cost = stock.current_price * quantity
+    if user.balance < total_cost:
+        return jsonify({'error': 'Insufficient balance'}), 400
+    
+    user.balance -= total_cost
+    transaction = Transaction(
+        user_id=user.id,
+        stock_id=stock.id,
+        quantity=quantity,
+        price_per_share=stock.current_price,
+        transaction_type='buy'
+    )
+    db.session.add(transaction)
+    db.session.commit()
+    return jsonify({'message': 'Stock purchased successfully'})
+
+@bp.route('/api/sell', methods=['POST'])
+def sell_stock():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    data = request.get_json()
+    stock_id = data['stock_id']
+    quantity = data['quantity']
+    
+    user = User.query.get(session['user_id'])
+    stock = Stock.query.get(stock_id)
+    
+    if not stock or quantity <= 0:
+        return jsonify({'error': 'Invalid stock or quantity'}), 400
+    
+    transactions = Transaction.query.filter_by(user_id=user.id, stock_id=stock.id).all()
+    owned_quantity = sum(t.quantity if t.transaction_type == 'buy' else -t.quantity for t in transactions)
+    if owned_quantity < quantity:
+        return jsonify({'error': 'Not enough shares owned'}), 400
+    
+    total_earned = stock.current_price * quantity
+    user.balance += total_earned
+    transaction = Transaction(
+        user_id=user.id,
+        stock_id=stock.id,
+        quantity=quantity,
+        price_per_share=stock.current_price,
+        transaction_type='sell'
+    )
+    db.session.add(transaction)
+    db.session.commit()
+    return jsonify({'message': 'Stock sold successfully'})
+
+@bp.route('/api/portfolio', methods=['GET'])
+def get_portfolio():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    user = User.query.get(session['user_id'])
+    transactions = Transaction.query.filter_by(user_id=user.id).all()
+    
+    portfolio = {}
+    for t in transactions:
+        stock = Stock.query.get(t.stock_id)
+        if stock.symbol not in portfolio:
+            portfolio[stock.symbol] = {'quantity': 0, 'value': 0.0}
+        quantity_change = t.quantity if t.transaction_type == 'buy' else -t.quantity
+        portfolio[stock.symbol]['quantity'] += quantity_change
+        portfolio[stock.symbol]['value'] += quantity_change * stock.current_price
+    
+    return jsonify({
+        'balance': user.balance,
+        'portfolio': [
+            {'symbol': symbol, 'quantity': data['quantity'], 'value': data['value']}
+            for symbol, data in portfolio.items() if data['quantity'] > 0
+        ]
+    })
+
+@bp.route('/api/login', methods=['POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        conn = get_db_connection()
-        if conn is None:
-            return render_template('login.html', error="Database connection failed")
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE username = %s AND verified = 1", (username,))
-        user = cursor.fetchone()
-        cursor.close()
-        conn.close()
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    if user and user.password == data['password']:  # Use hashing in production
+        session['user_id'] = user.id
+        return jsonify({'message': 'Logged in'})
+    return jsonify({'error': 'Invalid credentials'}), 401
+@bp.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data['username']
+    password = data['password']
+    
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'Username already exists'}), 400
+    
+    new_user = User(username=username, password=password)  # Hash password in production
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'Registration successful'})
+# Register the blueprint
+app.register_blueprint(bp, url_prefix='/api')
 
-        if user and bcrypt.check_password_hash(user['password'], password):
-            session['user_id'] = user['id']
-            session['expires_at'] = (datetime.now() + timedelta(minutes=30)).timestamp()
-            return redirect(url_for('dashboard'))
-        return render_template('login.html', error="Invalid credentials or unverified account")
+# Routes for rendering templates
+@app.route('/')
+def home():
+    return redirect(url_for('login_page'))  # Redirect to login_page instead of api.login
+
+@app.route('/login')
+def login_page():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
     return render_template('login.html')
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = bcrypt.generate_password_hash(request.form['password']).decode('utf-8')
-        conn = get_db_connection()
-        if conn is None:
-            return render_template('register.html', error="Database connection failed")
-        cursor = conn.cursor()
-        try:
-            verification_code = generate_verification_code()
-            cursor.execute("INSERT INTO users (username, email, password, verification_code, verified) VALUES (%s, %s, %s, %s, 0)", 
-                          (username, email, password, verification_code))
-            cursor.execute("UPDATE users SET achievements = '' WHERE email = %s", (email,))  # Set empty achievements
-            
-            conn.commit()
-            flash(f"Verification code sent to {email}. Please verify.", 'info')
-            return redirect(url_for('verify', email=email))
-        except mysql.connector.Error as err:
-            return render_template('register.html', error=str(err))
-        finally:
-            cursor.close()
-            conn.close()
-    return render_template('register.html')
-
-@app.route('/verify/<email>', methods=['GET', 'POST'])
-def verify(email):
-    if request.method == 'POST':
-        code = request.form['code']
-        conn = get_db_connection()
-        if conn is None:
-            return render_template('verify.html', error="Database connection failed")
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = %s AND verification_code = %s", (email, code))
-        user = cursor.fetchone()
-        if user:
-            cursor.execute("UPDATE users SET verified = 1, verification_code = NULL WHERE email = %s", (email,))
-            conn.commit()
-            flash("Account verified! Please log in.", 'success')
-            return redirect(url_for('login'))
-        flash("Invalid verification code.", 'error')
-        cursor.close()
-        conn.close()
-    return render_template('verify.html', email=email)
-
-@app.route('/risk_quiz', methods=['GET', 'POST'])
-def risk_quiz():
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        score = sum(int(request.form.get(f'q{i}', 0)) for i in range(1, 6))
-        risk_level = 'Low' if score <= 10 else 'Medium' if score <= 20 else 'High'
-        conn = get_db_connection()
-        if conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET risk_tolerance = %s WHERE id = %s", (risk_level, session['user_id']))
-            conn.commit()
-            cursor.close()
-            conn.close()
-        flash(f"Your risk tolerance is {risk_level}.", 'info')
+@app.route('/register')
+def register_page():
+    if 'user_id' in session:
         return redirect(url_for('dashboard'))
-    return render_template('risk_quiz.html')
+    return render_template('register.html')
 
 @app.route('/dashboard')
 def dashboard():
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-        return redirect(url_for('login'))
-    try:
-        response = requests.get(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin", timeout=10)
-        response.raise_for_status()
-        coins = json.loads(response.text)
-    except requests.RequestException:
-        coins = []
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT crypto_bucks, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
-        user = cursor.fetchone()
-        cursor.close()
-        conn.close()
-    return render_template('dashboard.html', coins=coins, user=user)
+    if 'user_id' not in session:
+        return redirect(url_for('login_page'))
+    return render_template('dashboard.html')
 
-@app.route('/portfolio', methods=['GET', 'POST'])
+@app.route('/portfolio')
 def portfolio():
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        coin_id = request.form['coin_id'].lower()
-        amount = float(request.form['amount'])
-        purchase_price = float(request.form['purchase_price'])
-        wallet_id = request.form.get('wallet_id')
-        conn = get_db_connection()
-        if conn:
-            cursor = conn.cursor()
-            # Get or create a wallet for the user
-            cursor.execute("SELECT id FROM wallets WHERE user_id = %s", (session['user_id'],))
-            existing_wallets = cursor.fetchall()
-            if not existing_wallets:
-                cursor.execute("INSERT INTO wallets (user_id, name) VALUES (%s, %s)", 
-                             (session['user_id'], 'Default Wallet'))
-                conn.commit()
-                cursor.execute("SELECT LAST_INSERT_ID()")
-                wallet_id = cursor.fetchone()[0]
-            elif wallet_id and not any(w[0] == int(wallet_id) for w in existing_wallets):
-                wallet_id = existing_wallets[0][0]  # Default to first wallet if selected wallet_id is invalid
-            else:
-                wallet_id = int(wallet_id) if wallet_id else existing_wallets[0][0]  # Use first wallet if none selected
-            
-            cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
-            crypto_bucks = cursor.fetchone()[0]
-            total_cost = amount * purchase_price
-            if total_cost <= crypto_bucks and amount > 0 and purchase_price > 0:
-                cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
-                cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, 'buy')",
-                             (session['user_id'], wallet_id, coin_id, amount, purchase_price))
-                conn.commit()
-            cursor.close()
-            conn.close()
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM transactions WHERE user_id = %s", (session['user_id'],))
-        transactions = cursor.fetchall()
-        cursor.close()
-        conn.close()
-    coin_ids = ','.join(set(t['coin_id'] for t in transactions)) or 'bnb'  # Default to bnb if empty
-    current_prices = {}
-    try:
-        response = requests.get(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}", timeout=10)
-        response.raise_for_status()
-        data = json.loads(response.text)
-        print(f"API Response: {data}")  # Debug full response
-        current_prices = {coin['id']: coin['current_price'] for coin in data if 'current_price' in coin}
-        print(f"Current Prices: {current_prices}")  # Debug processed prices
-    except requests.RequestException as e:
-        print(f"API Error: {e}")
-    except Exception as e:
-        print(f"Data Processing Error: {e}")
-    # Fetch user's wallets for the dropdown
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
-        user_wallets = cursor.fetchall()
-        cursor.close()
-        conn.close()
-    return render_template('portfolio.html', transactions=transactions, current_prices=current_prices, wallets=user_wallets)    
-
-@app.route('/watchlist', methods=['GET', 'POST'])
-def watchlist():
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        coin_id = request.form['coin_id'].lower()
-        conn = get_db_connection()
-        if conn:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO watchlist (user_id, coin_id) VALUES (%s, %s)", (session['user_id'], coin_id))
-            conn.commit()
-            cursor.close()
-            conn.close()
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT coin_id FROM watchlist WHERE user_id = %s", (session['user_id'],))
-        watchlist = cursor.fetchall()
-        cursor.close()
-        conn.close()
-    coin_ids = ','.join([w['coin_id'] for w in watchlist])
-    try:
-        response = requests.get(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}", timeout=10)
-        response.raise_for_status()
-        coins = json.loads(response.text)
-    except requests.RequestException:
-        coins = []
-    return render_template('watchlist.html', coins=coins)
-
-@app.route('/alerts', methods=['GET', 'POST'])
-def alerts():
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        coin_id = request.form['coin_id'].lower()
-        target_price = float(request.form['target_price'])
-        alert_type = request.form['alert_type']
-        order_type = request.form.get('order_type', 'limit')
-        conn = get_db_connection()
-        if conn:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type, order_type) VALUES (%s, %s, %s, %s, %s)",
-                          (session['user_id'], coin_id, target_price, alert_type, order_type))
-            conn.commit()
-            cursor.close()
-            conn.close()
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM price_alerts WHERE user_id = %s", (session['user_id'],))
-        alerts = cursor.fetchall()
-        cursor.close()
-        conn.close()
-    return render_template('alerts.html', alerts=alerts)
+    if 'user_id' not in session:
+        return redirect(url_for('login_page'))
+    return render_template('portfolio.html')
 
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
-    session.pop('expires_at', None)
-    return redirect(url_for('login'))
+    return redirect(url_for('login_page'))
 
-@app.route('/historical/<coin_id>')
-def historical(coin_id):
+# Stock price update function
+def update_stock_prices():
+    stocks = Stock.query.all()
+    for stock in stocks:
+        change_percent = random.uniform(-0.05, 0.05)  # ±5% fluctuation
+        stock.current_price = stock.current_price * (1 + change_percent)
+        stock.last_updated = datetime.utcnow()
+    db.session.commit()
+
+# Start the scheduler
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(update_stock_prices, 'interval', minutes=10)  # Update every 10 minutes
+    scheduler.start()
+
+if __name__ == '__main__':
     try:
-        response = requests.get(f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days=30", timeout=10)
-        response.raise_for_status()
-        data = json.loads(response.text)
-        dates = [datetime.fromtimestamp(item[0]/1000).strftime('%Y-%m-%d') for item in data['prices']]
-        prices = [item[1] for item in data['prices']]
-        return jsonify({'dates': dates, 'prices': prices})
-    except requests.RequestException:
-        return jsonify({'error': 'Failed to fetch historical data'}), 500
-
-@app.route('/achievements')
-def achievements():
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-        return redirect(url_for('login'))
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT achievements FROM users WHERE id = %s", (session['user_id'],))
-        user = cursor.fetchone()
-        achievements_list = user['achievements'].split(',') if user['achievements'] else []
-        cursor.close()
-        conn.close()
-    return render_template('achievements.html', achievements=achievements_list)
-
-@app.route('/update_achievements', methods=['POST'])
-def update_achievements():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    achievement = request.form.get('achievement')
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT achievements FROM users WHERE id = %s", (session['user_id'],))
-        user = cursor.fetchone()
-        current_achievements = user['achievements'].split(',') if user['achievements'] else []
-        if achievement not in current_achievements:
-            current_achievements.append(achievement)
-            cursor.execute("UPDATE users SET achievements = %s WHERE id = %s", (','.join(current_achievements), session['user_id']))
-            conn.commit()
-        cursor.close()
-        conn.close()
-    return redirect(url_for('achievements'))
+        with app.app_context():
+            db.create_all()  # Ensure tables are created (skip if already done via database.sql)
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        raise e
+    start_scheduler()
+    app.run(debug=True)

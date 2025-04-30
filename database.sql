@@ -1,62 +1,43 @@
-CREATE DATABASE IF NOT EXISTS crypto_tracker;
-USE crypto_tracker;
+-- Create the database (if not already created)
+CREATE DATABASE IF NOT EXISTS coinprep;
+USE coinprep;
 
+-- Table for users with fake currency balance
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    crypto_bucks DECIMAL(15, 2) DEFAULT 10000.00,
-    risk_tolerance VARCHAR(20) DEFAULT 'Medium',
-    verification_code VARCHAR(6),
-    verified TINYINT(1) DEFAULT 0,
-    achievements TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    username VARCHAR(80) NOT NULL UNIQUE,
+    password VARCHAR(120) NOT NULL,
+    balance DECIMAL(15, 2) DEFAULT 10000.00 -- Fake currency balance starting at 10,000
 );
 
-CREATE TABLE IF NOT EXISTS wallets (
+-- Table for stocks with dynamic pricing
+CREATE TABLE IF NOT EXISTS stocks (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    name VARCHAR(50) NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    symbol VARCHAR(10) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    current_price DECIMAL(15, 2) NOT NULL,
+    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Table for tracking transactions (buy/sell)
 CREATE TABLE IF NOT EXISTS transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    wallet_id INT,
-    coin_id VARCHAR(50),
-    amount DECIMAL(15, 8),
-    price DECIMAL(15, 2),
-    type ENUM('buy', 'sell', 'limit', 'market', 'stop'),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id INT NOT NULL,
+    stock_id INT NOT NULL,
+    quantity INT NOT NULL,
+    price_per_share DECIMAL(15, 2) NOT NULL,
+    transaction_type ENUM('buy', 'sell') NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (wallet_id) REFERENCES wallets(id)
+    FOREIGN KEY (stock_id) REFERENCES stocks(id)
 );
 
-CREATE TABLE IF NOT EXISTS watchlist (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    coin_id VARCHAR(50),
-    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
+-- Insert initial stock data for testing
+INSERT INTO stocks (symbol, name, current_price) VALUES
+('AAPL', 'Apple Inc.', 150.00),
+('GOOGL', 'Google LLC', 2500.00),
+('TSLA', 'Tesla Inc.', 700.00);
 
-CREATE TABLE IF NOT EXISTS price_alerts (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    coin_id VARCHAR(50),
-    target_price DECIMAL(15, 2),
-    alert_type ENUM('above', 'below'),
-    order_type ENUM('limit', 'market', 'stop'),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
--- Insert a default user
-INSERT INTO users (username, email, password) VALUES 
-('admin', 'admin@example.com', 'hashedpassword123');  -- Use bcrypt.hash('password123') in app for real use
-
--- Insert wallets for the default user (id = 1)
-INSERT INTO wallets (user_id, name) VALUES (1, 'Default Wallet'), (1, 'Altcoin Wallet')
-ON DUPLICATE KEY UPDATE name=name;
+-- Optional: Insert a test user
+INSERT INTO users (username, password) VALUES
+('testuser', 'testpass'); -- Use proper hashing in production
