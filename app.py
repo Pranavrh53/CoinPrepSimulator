@@ -8,6 +8,7 @@ import os
 import random
 import string
 import hashlib
+import time
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -23,6 +24,9 @@ db_config = {
 
 # CoinGecko API
 COINGECKO_API = "https://api.coingecko.com/api/v3"
+COINS_PER_PAGE = 20
+CACHE_DURATION = 300  # Cache API responses for 5 minutes (increased from 60 seconds)
+api_cache = {}  # In-memory cache: {url: (response_data, timestamp)}
 
 def get_db_connection():
     try:
@@ -33,6 +37,38 @@ def get_db_connection():
 
 def generate_verification_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+def fetch_with_retry(url, retries=3, delay=5):
+    # Check cache first
+    if url in api_cache:
+        cached_data, timestamp = api_cache[url]
+        if time.time() - timestamp < CACHE_DURATION:
+            print(f"Cache hit for {url}")
+            return type('Response', (), {'text': json.dumps(cached_data), 'raise_for_status': lambda: None})()
+        else:
+            print(f"Cache expired for {url}")
+    
+    for attempt in range(retries):
+        try:
+            print(f"Making API request to {url} (attempt {attempt + 1})")
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            # Cache the response
+            api_cache[url] = (response.json(), time.time())
+            print(f"API request successful for {url}")
+            return response
+        except requests.RequestException as e:
+            if attempt < retries - 1:
+                time.sleep(delay)
+                continue
+            print(f"API request failed after {retries} attempts: {e}")
+            # Fallback: Return the last cached response if available, even if expired
+            if url in api_cache:
+                cached_data, timestamp = api_cache[url]
+                print(f"Returning expired cached response for {url}")
+                return type('Response', (), {'text': json.dumps(cached_data), 'raise_for_status': lambda: None})()
+            return None
+    return None
 
 @app.route('/')
 def index():
@@ -164,12 +200,11 @@ def dashboard():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
     coins = []
-    try:
-        response = requests.get(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin", timeout=10)
-        response.raise_for_status()
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin")
+    if response:
         coins = json.loads(response.text)
-    except requests.RequestException as e:
-        flash(f"Failed to fetch market data: {e}", "error")
+    else:
+        flash("Failed to fetch market data. Please try again later.", "error")
     conn = get_db_connection()
     user = None
     if conn:
@@ -184,6 +219,105 @@ def dashboard():
                 cursor.close()
                 conn.close()
     return render_template('combined.html', section='dashboard', coins=coins, user=user)
+
+@app.route('/live_market')
+def live_market():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    page = int(request.args.get('page', 1))
+    coins = []
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={COINS_PER_PAGE}&page={page}&sparkline=false")
+    if response:
+        coins = json.loads(response.text)
+    else:
+        flash("Failed to fetch live market data. Using cached data if available.", "warning")
+    total_coins = 1000  # Approximate total coins for pagination
+    total_pages = (total_coins + COINS_PER_PAGE - 1) // COINS_PER_PAGE
+    conn = get_db_connection()
+    user_wallets = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            # Check if the user has any wallets
+            cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
+            user_wallets = cursor.fetchall()
+            # If no wallets exist, create a default one
+            if not user_wallets:
+                cursor.execute("INSERT INTO wallets (user_id, name) VALUES (%s, %s)", 
+                              (session['user_id'], 'Default Wallet'))
+                conn.commit()
+                # Fetch the newly created wallet
+                cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
+                user_wallets = cursor.fetchall()
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    return render_template('combined.html', section='live_market', coins=coins, wallets=user_wallets, page=page, total_pages=total_pages)
+
+@app.route('/trade', methods=['POST'])
+def trade():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    coin_id = request.form.get('coin_id', '').lower()
+    amount = request.form.get('amount')
+    current_price = request.form.get('current_price')
+    wallet_id = request.form.get('wallet_id')
+    action = request.form.get('action')
+    if not all([coin_id, amount, current_price, wallet_id, action]) or action not in ['buy', 'sell']:
+        flash("All fields are required", "error")
+        return redirect(url_for('live_market'))
+    try:
+        amount = float(amount)
+        current_price = float(current_price)
+        wallet_id = int(wallet_id)
+    except ValueError:
+        flash("Invalid amount, price, or wallet", "error")
+        return redirect(url_for('live_market'))
+    if amount <= 0 or current_price <= 0:
+        flash("Amount and price must be positive", "error")
+        return redirect(url_for('live_market'))
+    conn = get_db_connection()
+    if conn is None:
+        flash("Database connection failed", "error")
+        return redirect(url_for('live_market'))
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
+        crypto_bucks = cursor.fetchone()[0]
+        total_cost = amount * current_price
+        if action == 'buy':
+            if total_cost > crypto_bucks:
+                flash("Insufficient CryptoBucks", "error")
+                return redirect(url_for('live_market'))
+            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
+            cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
+                          (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
+        else:  # sell
+            cursor.execute("SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND coin_id = %s AND type = 'buy'",
+                          (session['user_id'], coin_id))
+            total_bought = cursor.fetchone()[0] or 0
+            cursor.execute("SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND coin_id = %s AND type = 'sell'",
+                          (session['user_id'], coin_id))
+            total_sold = cursor.fetchone()[0] or 0
+            available = total_bought - total_sold
+            if amount > available:
+                flash("Insufficient coin amount to sell", "error")
+                return redirect(url_for('live_market'))
+            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (total_cost, session['user_id']))
+            cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
+                          (session['user_id'], wallet_id, coin_id, amount, current_price, 'sell'))
+        conn.commit()
+        flash(f"Successfully {action} {amount} {coin_id}", "success")
+    except mysql.connector.Error as err:
+        flash(f"Database error: {err}", "error")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+    return redirect(url_for('live_market'))
 
 @app.route('/portfolio', methods=['GET', 'POST'])
 def portfolio():
@@ -244,6 +378,12 @@ def portfolio():
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT * FROM transactions WHERE user_id = %s", (session['user_id'],))
             transactions = cursor.fetchall()
+            # Convert Decimal fields to float to avoid type mismatch in template
+            for transaction in transactions:
+                if 'price' in transaction:
+                    transaction['price'] = float(transaction['price'])
+                if 'amount' in transaction:
+                    transaction['amount'] = float(transaction['amount'])
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
@@ -252,13 +392,12 @@ def portfolio():
                 conn.close()
     coin_ids = ','.join(set(t['coin_id'] for t in transactions)) or 'bitcoin'
     current_prices = {}
-    try:
-        response = requests.get(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}", timeout=10)
-        response.raise_for_status()
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}")
+    if response:
         data = json.loads(response.text)
         current_prices = {coin['id']: coin['current_price'] for coin in data if 'current_price' in coin}
-    except requests.RequestException as e:
-        flash(f"API Error: {e}", "error")
+    else:
+        flash("Failed to fetch current prices. Using cached data if available.", "warning")
     conn = get_db_connection()
     user_wallets = []
     if conn:
@@ -311,12 +450,11 @@ def watchlist():
                 conn.close()
     coin_ids = ','.join([w['coin_id'] for w in watchlist]) or 'bitcoin'
     coins = []
-    try:
-        response = requests.get(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}", timeout=10)
-        response.raise_for_status()
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}")
+    if response:
         coins = json.loads(response.text)
-    except requests.RequestException as e:
-        flash(f"API Error: {e}", "error")
+    else:
+        flash("Failed to fetch watchlist data. Using cached data if available.", "warning")
     return render_template('combined.html', section='watchlist', coins=coins)
 
 @app.route('/alerts', methods=['GET', 'POST'])
@@ -373,15 +511,13 @@ def logout():
 
 @app.route('/historical/<coin_id>')
 def historical(coin_id):
-    try:
-        response = requests.get(f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days=30", timeout=10)
-        response.raise_for_status()
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days=30")
+    if response:
         data = json.loads(response.text)
         dates = [datetime.fromtimestamp(item[0]/1000).strftime('%Y-%m-%d') for item in data['prices']]
         prices = [item[1] for item in data['prices']]
         return jsonify({'dates': dates, 'prices': prices})
-    except requests.RequestException:
-        return jsonify({'error': 'Failed to fetch historical data'}), 500
+    return jsonify({'error': 'Failed to fetch historical data'}), 500
 
 @app.route('/achievements')
 def achievements():
@@ -423,6 +559,8 @@ def update_achievements():
                 cursor.execute("UPDATE users SET achievements = %s WHERE id = %s", (','.join(current_achievements), session['user_id']))
                 conn.commit()
                 flash("Achievement added successfully", "success")
+            else:
+                flash("Achievement already exists", "error")
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:

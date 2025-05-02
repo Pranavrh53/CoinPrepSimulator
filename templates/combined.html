@@ -4,6 +4,32 @@
     <title>CryptoTracker</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .pagination {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .pagination a {
+            margin: 0 5px;
+            text-decoration: none;
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .pagination a.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .pagination a:hover {
+            background-color: #f0f0f0;
+        }
+        .buy-sell-form {
+            display: inline-flex;
+            gap: 10px;
+            align-items: center;
+        }
+    </style>
 </head>
 <body>
     <!-- Login Page -->
@@ -67,6 +93,7 @@
     <div id="dashboard" class="container" style="display: none;">
         <h1>CryptoTracker Dashboard</h1>
         <nav>
+            <a href="{{ url_for('live_market') }}">Live Market</a>
             <a href="{{ url_for('portfolio') }}">Portfolio</a>
             <a href="{{ url_for('watchlist') }}">Watchlist</a>
             <a href="{{ url_for('alerts') }}">Price Alerts</a>
@@ -102,6 +129,10 @@
             fetch('/historical/bitcoin')
                 .then(response => response.json())
                 .then(data => {
+                    if (data.error) {
+                        console.error('Failed to load historical data:', data.error);
+                        return;
+                    }
                     new Chart(document.getElementById('historicalChart'), {
                         type: 'line',
                         data: {
@@ -115,8 +146,68 @@
                         },
                         options: { scales: { y: { beginAtZero: false } } }
                     });
-                });
+                })
+                .catch(error => console.error('Error fetching historical data:', error));
         </script>
+    </div>
+
+    <!-- Live Market Page -->
+    <div id="live_market" class="container" style="display: none;">
+        <h1>Live Cryptocurrency Market</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <h2>All Cryptocurrencies</h2>
+        <table>
+            <tr>
+                <th>Coin</th>
+                <th>Symbol</th>
+                <th>Price (USD)</th>
+                <th>24h Change</th>
+                <th>Market Cap</th>
+                <th>Actions</th>
+            </tr>
+            {% if coins %}
+                {% for coin in coins %}
+                    <tr>
+                        <td>{{ coin.name }}</td>
+                        <td>{{ coin.symbol }}</td>
+                        <td>${{ coin.current_price }}</td>
+                        <td>{{ coin.price_change_percentage_24h }}%</td>
+                        <td>${{ coin.market_cap }}</td>
+                        <td>
+                            <div class="buy-sell-form">
+                                <form method="POST" action="{{ url_for('trade') }}">
+                                    <input type="hidden" name="coin_id" value="{{ coin.id }}">
+                                    <input type="hidden" name="current_price" value="{{ coin.current_price }}">
+                                    <input type="number" name="amount" placeholder="Amount" step="0.00000001" min="0" required>
+                                    <select name="wallet_id" required>
+                                        {% if wallets %}
+                                            {% for wallet in wallets %}
+                                                <option value="{{ wallet[0] }}">{{ wallet[1] }}</option>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </select>
+                                    <button type="submit" name="action" value="buy">Buy</button>
+                                    <button type="submit" name="action" value="sell">Sell</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            {% endif %}
+        </table>
+        {% if section == 'live_market' %}
+            <div class="pagination">
+                {% if page > 1 %}
+                    <a href="{{ url_for('live_market', page=page-1) }}">Previous</a>
+                {% endif %}
+                {% for p in range(1, total_pages + 1) %}
+                    <a href="{{ url_for('live_market', page=p) }}" class="{% if p == page %}active{% endif %}">{{ p }}</a>
+                {% endfor %}
+                {% if page < total_pages %}
+                    <a href="{{ url_for('live_market', page=page+1) }}">Next</a>
+                {% endif %}
+            </div>
+        {% endif %}
     </div>
 
     <!-- Portfolio Page -->
@@ -278,7 +369,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const sections = ['login', 'register', 'verify', 'dashboard', 'portfolio', 'watchlist', 'alerts', 'risk_quiz', 'achievements'];
+            const sections = ['login', 'register', 'verify', 'dashboard', 'live_market', 'portfolio', 'watchlist', 'alerts', 'risk_quiz', 'achievements'];
             sections.forEach(section => {
                 document.getElementById(section).style.display = 'none';
             });
@@ -289,38 +380,6 @@
                 document.getElementById('login').style.display = 'block';
             }
         });
-    </script>
-    <script>
-        (function(){
-            function c(){
-                var b=a.contentDocument||a.contentWindow.document;
-                if(b){
-                    var d=b.createElement('script');
-                    d.innerHTML="window.__CF$cv$params={r:'93967d555b9e44e7',t:'MTc0NjE3ODExOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
-                    b.getElementsByTagName('head')[0].appendChild(d)
-                }
-            }
-            if(document.body){
-                var a=document.createElement('iframe');
-                a.height=1;
-                a.width=1;
-                a.style.position='absolute';
-                a.style.top=0;
-                a.style.left=0;
-                a.style.border='none';
-                a.style.visibility='hidden';
-                document.body.appendChild(a);
-                if('loading'!==document.readyState)c();
-                else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);
-                else{
-                    var e=document.onreadystatechange||function(){};
-                    document.onreadystatechange=function(b){
-                        e(b);
-                        'loading'!==document.readyState&&(document.onreadystatechange=e,c())
-                    }
-                }
-            }
-        })();
     </script>
 </body>
 </html>
