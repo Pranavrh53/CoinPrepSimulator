@@ -77,3 +77,26 @@ nav a {
 .success {
     color: green;
 }
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+.error {
+    color: red;
+}
+.info {
+    color: blue;
+}
+.success {
+    color: green;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}

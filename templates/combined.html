@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CryptoTracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="login" class="container" style="display: none;">
+        <h1>Login</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+        <form method="POST" action="{{ url_for('login') }}">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+        <p>Don't have an account? <a href="{{ url_for('register') }}">Register</a></p>
+    </div>
+
+    <!-- Register Page -->
+    <div id="register" class="container" style="display: none;">
+        <h1>Register</h1>
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+        <form method="POST" action="{{ url_for('register') }}">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Register</button>
+        </form>
+        <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+    </div>
+
+    <!-- Verify Page -->
+    <div id="verify" class="container" style="display: none;">
+        <h1>Verify Your Account</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+        <p>A verification code has been sent to your email. Please enter it below.</p>
+        <form method="POST" action="{{ url_for('verify', email=email) }}">
+            <input type="text" name="code" placeholder="Verification Code" required>
+            <button type="submit">Verify</button>
+        </form>
+        <p><a href="{{ url_for('login') }}">Back to Login</a></p>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div id="dashboard" class="container" style="display: none;">
+        <h1>CryptoTracker Dashboard</h1>
+        <nav>
+            <a href="{{ url_for('portfolio') }}">Portfolio</a>
+            <a href="{{ url_for('watchlist') }}">Watchlist</a>
+            <a href="{{ url_for('alerts') }}">Price Alerts</a>
+            <a href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
+            <a href="{{ url_for('achievements') }}">Achievements</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </nav>
+        {% if user %}
+            <p>CryptoBucks Balance: {{ user.crypto_bucks }}</p>
+            <p>Risk Tolerance: {{ user.risk_tolerance }}</p>
+        {% endif %}
+        <h2>Market Overview</h2>
+        <table>
+            <tr>
+                <th>Coin</th>
+                <th>Price (USD)</th>
+                <th>24h Change</th>
+                <th>Market Cap</th>
+            </tr>
+            {% if coins %}
+                {% for coin in coins %}
+                    <tr>
+                        <td>{{ coin.name }}</td>
+                        <td>${{ coin.current_price }}</td>
+                        <td>{{ coin.price_change_percentage_24h }}%</td>
+                        <td>${{ coin.market_cap }}</td>
+                    </tr>
+                {% endfor %}
+            {% endif %}
+        </table>
+        <canvas id="historicalChart" width="400" height="200"></canvas>
+        <script>
+            fetch('/historical/bitcoin')
+                .then(response => response.json())
+                .then(data => {
+                    new Chart(document.getElementById('historicalChart'), {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'Bitcoin Price (USD)',
+                                data: data.prices,
+                                borderColor: 'blue',
+                                fill: false
+                            }]
+                        },
+                        options: { scales: { y: { beginAtZero: false } } }
+                    });
+                });
+        </script>
+    </div>
+
+    <!-- Portfolio Page -->
+    <div id="portfolio" class="container" style="display: none;">
+        <h1>Your Portfolio</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <h2>Add to Portfolio</h2>
+        <form method="POST" action="{{ url_for('portfolio') }}">
+            <select name="wallet_id" required>
+                {% if wallets %}
+                    {% for wallet in wallets %}
+                        <option value="{{ wallet[0] }}">{{ wallet[1] }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+            <input type="text" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
+            <input type="number" name="amount" placeholder="Amount" step="0.00000001" required>
+            <input type="number" name="purchase_price" placeholder="Purchase Price (USD)" step="0.01" required>
+            <button type="submit">Add</button>
+        </form>
+        <h2>Your Holdings</h2>
+        <table>
+            <tr>
+                <th>Wallet</th>
+                <th>Coin</th>
+                <th>Amount</th>
+                <th>Purchase Price</th>
+                <th>Current Price</th>
+                <th>Profit/Loss</th>
+            </tr>
+            {% if transactions %}
+                {% for transaction in transactions %}
+                    <tr>
+                        <td>Wallet {{ transaction.wallet_id }}</td>
+                        <td>{{ transaction.coin_id }}</td>
+                        <td>{{ transaction.amount }}</td>
+                        <td>${{ transaction.price }}</td>
+                        <td>${{ current_prices.get(transaction.coin_id, 0) }}</td>
+                        <td>${{ (current_prices.get(transaction.coin_id, 0) - transaction.price) * transaction.amount | round(2) }}</td>
+                    </tr>
+                {% endfor %}
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- Watchlist Page -->
+    <div id="watchlist" class="container" style="display: none;">
+        <h1>Your Watchlist</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <h2>Add to Watchlist</h2>
+        <form method="POST" action="{{ url_for('watchlist') }}">
+            <input type="text" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
+            <button type="submit">Add</button>
+        </form>
+        <h2>Watched Coins</h2>
+        <table>
+            <tr>
+                <th>Coin</th>
+                <th>Price (USD)</th>
+                <th>24h Change</th>
+            </tr>
+            {% if coins %}
+                {% for coin in coins %}
+                    <tr>
+                        <td>{{ coin.name }}</td>
+                        <td>${{ coin.current_price }}</td>
+                        <td>{{ coin.price_change_percentage_24h }}%</td>
+                    </tr>
+                {% endfor %}
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- Alerts Page -->
+    <div id="alerts" class="container" style="display: none;">
+        <h1>Price Alerts</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <h2>Set New Alert</h2>
+        <form method="POST" action="{{ url_for('alerts') }}">
+            <input type="text" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
+            <input type="number" name="target_price" placeholder="Target Price (USD)" step="0.01" required>
+            <select name="alert_type" required>
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+            </select>
+            <select name="order_type" required>
+                <option value="limit">Limit</option>
+                <option value="market">Market</option>
+                <option value="stop">Stop</option>
+            </select>
+            <button type="submit">Set Alert</button>
+        </form>
+        <h2>Your Alerts</h2>
+        <table>
+            <tr>
+                <th>Coin</th>
+                <th>Target Price</th>
+                <th>Type</th>
+                <th>Order Type</th>
+            </tr>
+            {% if alerts %}
+                {% for alert in alerts %}
+                    <tr>
+                        <td>{{ alert.coin_id }}</td>
+                        <td>${{ alert.target_price }}</td>
+                        <td>{{ alert.alert_type }}</td>
+                        <td>{{ alert.order_type }}</td>
+                    </tr>
+                {% endfor %}
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- Risk Quiz Page -->
+    <div id="risk_quiz" class="container" style="display: none;">
+        <h1>Risk Tolerance Quiz</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('risk_quiz') }}">
+            <p>1. How would you react to a 20% drop in your portfolio? (1 = Sell immediately, 5 = Hold long-term)</p>
+            <input type="number" name="q1" min="1" max="5" required>
+            <p>2. What portion of your savings are you willing to invest? (1 = 0-10%, 5 = 50%+)</p>
+            <input type="number" name="q2" min="1" max="5" required>
+            <p>3. How often do you check your investments? (1 = Daily, 5 = Rarely)</p>
+            <input type="number" name="q3" min="1" max="5" required>
+            <p>4. Are you comfortable with volatile markets? (1 = No, 5 = Yes)</p>
+            <input type="number" name="q4" min="1" max="5" required>
+            <p>5. What is your investment horizon? (1 = <1 year, 5 = >10 years)</p>
+            <input type="number" name="q5" min="1" max="5" required>
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+
+    <!-- Achievements Page -->
+    <div id="achievements" class="container" style="display: none;">
+        <h1>Achievements</h1>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <ul>
+            {% if achievements %}
+                {% for achievement in achievements %}
+                    <li>{{ achievement }}</li>
+                {% endfor %}
+            {% endif %}
+        </ul>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sections = ['login', 'register', 'verify', 'dashboard', 'portfolio', 'watchlist', 'alerts', 'risk_quiz', 'achievements'];
+            sections.forEach(section => {
+                document.getElementById(section).style.display = 'none';
+            });
+            const section = '{{ section | default('login') }}';
+            if (sections.includes(section)) {
+                document.getElementById(section).style.display = 'block';
+            } else {
+                document.getElementById('login').style.display = 'block';
+            }
+        });
+    </script>
+    <script>
+        (function(){
+            function c(){
+                var b=a.contentDocument||a.contentWindow.document;
+                if(b){
+                    var d=b.createElement('script');
+                    d.innerHTML="window.__CF$cv$params={r:'93967d555b9e44e7',t:'MTc0NjE3ODExOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
+                    b.getElementsByTagName('head')[0].appendChild(d)
+                }
+            }
+            if(document.body){
+                var a=document.createElement('iframe');
+                a.height=1;
+                a.width=1;
+                a.style.position='absolute';
+                a.style.top=0;
+                a.style.left=0;
+                a.style.border='none';
+                a.style.visibility='hidden';
+                document.body.appendChild(a);
+                if('loading'!==document.readyState)c();
+                else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);
+                else{
+                    var e=document.onreadystatechange||function(){};
+                    document.onreadystatechange=function(b){
+                        e(b);
+                        'loading'!==document.readyState&&(document.onreadystatechange=e,c())
+                    }
+                }
+            }
+        })();
+    </script>
+</body>
+</html>
