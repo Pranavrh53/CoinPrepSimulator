@@ -571,3 +571,5 @@ def update_achievements():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+    # python app.py
