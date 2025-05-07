@@ -25,7 +25,7 @@ db_config = {
 # CoinGecko API
 COINGECKO_API = "https://api.coingecko.com/api/v3"
 COINS_PER_PAGE = 20
-CACHE_DURATION = 300  # Cache API responses for 5 minutes (increased from 60 seconds)
+CACHE_DURATION = 300  # Cache API responses for 5 minutes
 api_cache = {}  # In-memory cache: {url: (response_data, timestamp)}
 
 def get_db_connection():
@@ -39,7 +39,6 @@ def generate_verification_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 def fetch_with_retry(url, retries=3, delay=5):
-    # Check cache first
     if url in api_cache:
         cached_data, timestamp = api_cache[url]
         if time.time() - timestamp < CACHE_DURATION:
@@ -53,7 +52,6 @@ def fetch_with_retry(url, retries=3, delay=5):
             print(f"Making API request to {url} (attempt {attempt + 1})")
             response = requests.get(url, timeout=10)
             response.raise_for_status()
-            # Cache the response
             api_cache[url] = (response.json(), time.time())
             print(f"API request successful for {url}")
             return response
@@ -62,7 +60,6 @@ def fetch_with_retry(url, retries=3, delay=5):
                 time.sleep(delay)
                 continue
             print(f"API request failed after {retries} attempts: {e}")
-            # Fallback: Return the last cached response if available, even if expired
             if url in api_cache:
                 cached_data, timestamp = api_cache[url]
                 print(f"Returning expired cached response for {url}")
@@ -238,15 +235,12 @@ def live_market():
     if conn:
         try:
             cursor = conn.cursor()
-            # Check if the user has any wallets
             cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
             user_wallets = cursor.fetchall()
-            # If no wallets exist, create a default one
             if not user_wallets:
                 cursor.execute("INSERT INTO wallets (user_id, name) VALUES (%s, %s)", 
                               (session['user_id'], 'Default Wallet'))
                 conn.commit()
-                # Fetch the newly created wallet
                 cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
                 user_wallets = cursor.fetchall()
         except mysql.connector.Error as err:
@@ -266,49 +260,99 @@ def trade():
     current_price = request.form.get('current_price')
     wallet_id = request.form.get('wallet_id')
     action = request.form.get('action')
+    source = request.form.get('source', 'live_market')
     if not all([coin_id, amount, current_price, wallet_id, action]) or action not in ['buy', 'sell']:
         flash("All fields are required", "error")
-        return redirect(url_for('live_market'))
+        return redirect(url_for(source))
     try:
         amount = float(amount)
         current_price = float(current_price)
         wallet_id = int(wallet_id)
     except ValueError:
         flash("Invalid amount, price, or wallet", "error")
-        return redirect(url_for('live_market'))
+        return redirect(url_for(source))
     if amount <= 0 or current_price <= 0:
         flash("Amount and price must be positive", "error")
-        return redirect(url_for('live_market'))
+        return redirect(url_for(source))
     conn = get_db_connection()
     if conn is None:
         flash("Database connection failed", "error")
-        return redirect(url_for('live_market'))
+        return redirect(url_for(source))
     try:
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
-        crypto_bucks = cursor.fetchone()[0]
+        crypto_bucks = float(cursor.fetchone()['crypto_bucks'])
         total_cost = amount * current_price
         if action == 'buy':
             if total_cost > crypto_bucks:
                 flash("Insufficient CryptoBucks", "error")
-                return redirect(url_for('live_market'))
+                return redirect(url_for(source))
             cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
             cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
                           (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
-        else:  # sell
-            cursor.execute("SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND coin_id = %s AND type = 'buy'",
-                          (session['user_id'], coin_id))
-            total_bought = cursor.fetchone()[0] or 0
-            cursor.execute("SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND coin_id = %s AND type = 'sell'",
-                          (session['user_id'], coin_id))
-            total_sold = cursor.fetchone()[0] or 0
+        else:
+            cursor.execute(
+                "SELECT id, amount, price FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy' ORDER BY id ASC",
+                (session['user_id'], wallet_id, coin_id)
+            )
+            buy_transactions = cursor.fetchall()
+            cursor.execute(
+                "SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy'",
+                (session['user_id'], wallet_id, coin_id)
+            )
+            total_bought = float(cursor.fetchone()['total'] or 0)
+            cursor.execute(
+                "SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'sell'",
+                (session['user_id'], wallet_id, coin_id)
+            )
+            total_sold = float(cursor.fetchone()['total'] or 0)
             available = total_bought - total_sold
+
             if amount > available:
                 flash("Insufficient coin amount to sell", "error")
-                return redirect(url_for('live_market'))
+                return redirect(url_for(source))
+
+            remaining_to_sell = amount
+            purchase_price = 0.0
+            weighted_price_sum = 0.0
+            for buy in buy_transactions:
+                if remaining_to_sell <= 0:
+                    break
+                cursor.execute(
+                    "SELECT SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'sell' AND buy_transaction_id = %s",
+                    (session['user_id'], wallet_id, coin_id, buy['id'])
+                )
+                already_sold = float(cursor.fetchone()['total_sold'] or 0)
+                available_from_this_buy = float(buy['amount']) - already_sold
+
+                if available_from_this_buy <= 0:
+                    continue
+
+                amount_to_use = min(remaining_to_sell, available_from_this_buy)
+                weighted_price_sum += amount_to_use * float(buy['price'])
+                remaining_to_sell -= amount_to_use
+
+            if amount > 0:
+                purchase_price = weighted_price_sum / amount
+
             cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (total_cost, session['user_id']))
-            cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
-                          (session['user_id'], wallet_id, coin_id, amount, current_price, 'sell'))
+            buy_transaction_id = None
+            remaining_to_sell = amount
+            for buy in buy_transactions:
+                cursor.execute(
+                    "SELECT SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'sell' AND buy_transaction_id = %s",
+                    (session['user_id'], wallet_id, coin_id, buy['id'])
+                )
+                already_sold = float(cursor.fetchone()['total_sold'] or 0)
+                available_from_this_buy = float(buy['amount']) - already_sold
+                if available_from_this_buy > 0:
+                    buy_transaction_id = buy['id']
+                    break
+
+            cursor.execute(
+                "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy_transaction_id)
+            )
         conn.commit()
         flash(f"Successfully {action} {amount} {coin_id}", "success")
     except mysql.connector.Error as err:
@@ -317,7 +361,7 @@ def trade():
         if conn.is_connected():
             cursor.close()
             conn.close()
-    return redirect(url_for('live_market'))
+    return redirect(url_for(source))
 
 @app.route('/portfolio', methods=['GET', 'POST'])
 def portfolio():
@@ -355,7 +399,7 @@ def portfolio():
                     wallet_id = int(wallet_id) if wallet_id else existing_wallets[0][0]
                 
                 cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
-                crypto_bucks = cursor.fetchone()[0]
+                crypto_bucks = float(cursor.fetchone()[0])
                 total_cost = amount * purchase_price
                 if total_cost <= crypto_bucks and amount > 0 and purchase_price > 0:
                     cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
@@ -371,33 +415,84 @@ def portfolio():
                 if conn.is_connected():
                     cursor.close()
                     conn.close()
+
+    # Fetch all transactions for the user
     conn = get_db_connection()
-    transactions = []
+    sold_transactions = []
+    total_profit = 0.0
+    current_prices = {}
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM transactions WHERE user_id = %s", (session['user_id'],))
-            transactions = cursor.fetchall()
-            # Convert Decimal fields to float to avoid type mismatch in template
-            for transaction in transactions:
-                if 'price' in transaction:
-                    transaction['price'] = float(transaction['price'])
-                if 'amount' in transaction:
-                    transaction['amount'] = float(transaction['amount'])
+            cursor.execute("SELECT * FROM transactions WHERE user_id = %s AND type = 'sell'", (session['user_id'],))
+            sold_transactions = cursor.fetchall()
+            
+            for transaction in sold_transactions:
+                transaction['price'] = float(transaction['price']) if transaction['price'] is not None else 0.0
+                transaction['sold_price'] = float(transaction['sold_price']) if transaction['sold_price'] is not None else 0.0
+                transaction['amount'] = float(transaction['amount']) if transaction['amount'] is not None else 0.0
+                profit = (transaction['sold_price'] - transaction['price']) * transaction['amount']
+                transaction['profit'] = profit
+                total_profit += profit
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    coin_ids = ','.join(set(t['coin_id'] for t in transactions)) or 'bitcoin'
-    current_prices = {}
+
+    # Calculate total bought and sold amounts per coin and wallet
+    conn = get_db_connection()
+    holdings = {}
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            # Fetch all buy transactions
+            cursor.execute("SELECT wallet_id, coin_id, SUM(amount) as total_amount, AVG(price) as avg_price "
+                         "FROM transactions WHERE user_id = %s AND type = 'buy' "
+                         "GROUP BY wallet_id, coin_id", (session['user_id'],))
+            buy_transactions = cursor.fetchall()
+
+            # Fetch all sell transactions
+            cursor.execute("SELECT wallet_id, coin_id, SUM(amount) as total_sold "
+                         "FROM transactions WHERE user_id = %s AND type = 'sell' "
+                         "GROUP BY wallet_id, coin_id", (session['user_id'],))
+            sell_transactions = cursor.fetchall()
+            sell_dict = {(s['wallet_id'], s['coin_id']): s['total_sold'] for s in sell_transactions}
+
+            # Calculate remaining amounts
+            for buy in buy_transactions:
+                key = (buy['wallet_id'], buy['coin_id'])
+                total_bought = float(buy['total_amount'] or 0)
+                total_sold = float(sell_dict.get(key, 0) or 0)
+                remaining_amount = total_bought - total_sold
+                if remaining_amount > 0:  # Only include coins with remaining amounts
+                    holdings[key] = {
+                        'wallet_id': buy['wallet_id'],
+                        'coin_id': buy['coin_id'],
+                        'amount': remaining_amount,
+                        'price': float(buy['avg_price'] or 0)
+                    }
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+
+    # Convert holdings to transactions list for the template
+    transactions = list(holdings.values())
+
+    # Fetch current prices for the coins in the portfolio
+    coin_ids = ','.join(set(t['coin_id'] for t in transactions + sold_transactions)) or 'bitcoin'
     response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}")
     if response:
         data = json.loads(response.text)
         current_prices = {coin['id']: coin['current_price'] for coin in data if 'current_price' in coin}
     else:
         flash("Failed to fetch current prices. Using cached data if available.", "warning")
+
+    # Fetch user's wallets
     conn = get_db_connection()
     user_wallets = []
     if conn:
@@ -411,51 +506,115 @@ def portfolio():
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='portfolio', transactions=transactions, current_prices=current_prices, wallets=user_wallets)
+
+    return render_template('combined.html', section='portfolio', transactions=transactions, sold_transactions=sold_transactions, total_profit=total_profit, current_prices=current_prices, wallets=user_wallets)
 
 @app.route('/watchlist', methods=['GET', 'POST'])
 def watchlist():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    if conn is None:
+        flash("Database connection failed", "error")
+        return redirect(url_for('dashboard'))
+
+    # Fetch a list of available coins for the dropdown
+    available_coins = []
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false")
+    if response:
+        available_coins = json.loads(response.text)
+    else:
+        flash("Failed to fetch coin list for dropdown. Using cached data if available.", "warning")
+        available_coins = []
+
+    # Handle POST requests for adding or removing coins
     if request.method == 'POST':
-        coin_id = request.form.get('coin_id', '').lower()
+        action = request.form.get('action')
+        coin_id = request.form.get('coin_id', '').lower().strip()
+
         if not coin_id:
             flash("Coin ID is required", "error")
             return redirect(url_for('watchlist'))
-        conn = get_db_connection()
-        if conn:
-            try:
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO watchlist (user_id, coin_id) VALUES (%s, %s)", (session['user_id'], coin_id))
-                conn.commit()
-                flash("Coin added to watchlist", "success")
-            except mysql.connector.Error as err:
-                flash(f"Database error: {err}", "error")
-            finally:
-                if conn.is_connected():
-                    cursor.close()
-                    conn.close()
-    conn = get_db_connection()
-    watchlist = []
-    if conn:
+
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT coin_id FROM watchlist WHERE user_id = %s", (session['user_id'],))
-            watchlist = cursor.fetchall()
+
+            if action == 'add':
+                # Verify the coin exists in CoinGecko
+                coin_exists = any(coin['id'] == coin_id for coin in available_coins)
+                if not coin_exists:
+                    flash(f"Coin '{coin_id}' not found. Please select a valid coin.", "error")
+                    return redirect(url_for('watchlist'))
+
+                # Check if the coin is already in the watchlist
+                cursor.execute("SELECT * FROM watchlist WHERE user_id = %s AND coin_id = %s", (session['user_id'], coin_id))
+                if cursor.fetchone():
+                    flash(f"'{coin_id}' is already in your watchlist.", "warning")
+                else:
+                    cursor.execute("INSERT INTO watchlist (user_id, coin_id) VALUES (%s, %s)", (session['user_id'], coin_id))
+                    conn.commit()
+                    flash(f"'{coin_id}' added to your watchlist!", "success")
+
+            elif action == 'remove':
+                # Remove the coin from the watchlist
+                cursor.execute("DELETE FROM watchlist WHERE user_id = %s AND coin_id = %s", (session['user_id'], coin_id))
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    flash(f"'{coin_id}' removed from your watchlist!", "success")
+                else:
+                    flash(f"'{coin_id}' not found in your watchlist.", "warning")
+
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    coin_ids = ','.join([w['coin_id'] for w in watchlist]) or 'bitcoin'
+        return redirect(url_for('watchlist'))
+
+    # Fetch the user's watchlist
+    watchlist = []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT coin_id FROM watchlist WHERE user_id = %s", (session['user_id'],))
+        watchlist = cursor.fetchall()
+    except mysql.connector.Error as err:
+        flash(f"Database error: {err}", "error")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+    # Fetch live data for watchlist coins
     coins = []
-    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}")
-    if response:
-        coins = json.loads(response.text)
+    if watchlist:
+        coin_ids = ','.join([w['coin_id'] for w in watchlist])
+        response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}&order=market_cap_desc&sparkline=false")
+        if response:
+            coins = json.loads(response.text)
+            # Ensure all watchlist coins are displayed, even if API fails to fetch some
+            watchlist_ids = set(w['coin_id'] for w in watchlist)
+            fetched_ids = set(coin['id'] for coin in coins)
+            missing_coins = watchlist_ids - fetched_ids
+            for coin_id in missing_coins:
+                coins.append({
+                    'id': coin_id,
+                    'name': coin_id.capitalize(),
+                    'symbol': coin_id[:3].upper(),
+                    'current_price': 'N/A',
+                    'price_change_percentage_24h': 'N/A',
+                    'market_cap': 'N/A'
+                })
+        else:
+            flash("Failed to fetch watchlist data. Using cached data if available.", "warning")
+            coins = [{'id': w['coin_id'], 'name': w['coin_id'].capitalize(), 'symbol': w['coin_id'][:3].upper(), 
+                      'current_price': 'N/A', 'price_change_percentage_24h': 'N/A', 'market_cap': 'N/A'} 
+                     for w in watchlist]
     else:
-        flash("Failed to fetch watchlist data. Using cached data if available.", "warning")
-    return render_template('combined.html', section='watchlist', coins=coins)
+        flash("Your watchlist is empty. Add some coins to track!", "info")
+
+    return render_template('combined.html', section='watchlist', coins=coins, available_coins=available_coins)
 
 @app.route('/alerts', methods=['GET', 'POST'])
 def alerts():
@@ -571,5 +730,3 @@ def update_achievements():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-    # python app.py
