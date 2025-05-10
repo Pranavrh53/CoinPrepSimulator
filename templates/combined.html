@@ -4,6 +4,7 @@
     <title>CryptoTracker</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
     <style>
         .pagination {
             margin: 20px 0;
@@ -28,6 +29,25 @@
             display: inline-flex;
             gap: 10px;
             align-items: center;
+        }
+        .risk-metrics {
+            margin: 20px 0;
+        }
+        .risk-metrics table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .risk-metrics th, .risk-metrics td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        .correlation-matrix {
+            margin: 20px 0;
+        }
+        #correlationHeatmap {
+            max-width: 600px;
+            margin: 0 auto;
         }
     </style>
 </head>
@@ -105,7 +125,7 @@
             <p>CryptoBucks Balance: {{ user.crypto_bucks }}</p>
             <p>Risk Tolerance: {{ user.risk_tolerance }}</p>
         {% endif %}
-        <h2>Market Overview(TOP MARKET CAPS)</h2>
+        <h2>Market Overview (Top Market Caps)</h2>
         <table>
             <tr>
                 <th>Coin</th>
@@ -130,57 +150,19 @@
         </table>
         <canvas id="historicalChart" width="400" height="200"></canvas>
         <script>
-            let currentChart = null; // To keep track of the current chart instance
+            document.addEventListener('DOMContentLoaded', () => {
+                {% if coins %}
+                    renderInteractiveChart('historicalChart', 'bitcoin', 'Bitcoin');
+                {% endif %}
 
-            function renderChart(coinId, coinName) {
-                fetch(`/historical/${coinId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.error) {
-                            console.error('Failed to load historical data:', data.error);
-                            return;
-                        }
-                        // Destroy the previous chart if it exists
-                        if (currentChart) {
-                            currentChart.destroy();
-                        }
-                        // Create a new chart
-                        currentChart = new Chart(document.getElementById('historicalChart'), {
-                            type: 'line',
-                            data: {
-                                labels: data.dates,
-                                datasets: [{
-                                    label: `${coinName} Price (USD)`,
-                                    data: data.prices,
-                                    borderColor: 'blue',
-                                    fill: false
-                                }]
-                            },
-                            options: { 
-                                scales: { 
-                                    y: { 
-                                        beginAtZero: false 
-                                    } 
-                                } 
-                            }
-                        });
-                    })
-                    .catch(error => console.error('Error fetching historical data:', error));
-            }
-
-            // Add event listeners to all "View Chart" buttons
-            document.querySelectorAll('.view-chart-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    const coinId = button.getAttribute('data-coin-id');
-                    const coinName = button.getAttribute('data-coin-name');
-                    renderChart(coinId, coinName);
+                document.querySelectorAll('.view-chart-btn').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const coinId = button.getAttribute('data-coin-id');
+                        const coinName = button.getAttribute('data-coin-name');
+                        renderInteractiveChart('historicalChart', coinId, coinName);
+                    });
                 });
             });
-
-            // Render Bitcoin chart by default on page load
-            {% if coins %}
-                renderChart('bitcoin', 'Bitcoin');
-            {% endif %}
         </script>
     </div>
 
@@ -277,26 +259,86 @@
                     <tr>
                         <td>Wallet {{ transaction.wallet_id }}</td>
                         <td>{{ transaction.coin_id }}</td>
-                        <td>{{ transaction.amount }}</td>
+                        <td>{{ transaction.amount | round(8) }}</td>
                         <td>${{ transaction.price | round(2) }}</td>
-                        <td>${{ current_prices.get(transaction.coin_id, 0) }}</td>
-                        <td>${{ (current_prices.get(transaction.coin_id, 0) - transaction.price) * transaction.amount | round(2) }}</td>
+                        <td>${{ current_prices.get(transaction.coin_id, 0) | round(2) }}</td>
+                        <td>${{ ((current_prices.get(transaction.coin_id, 0) - transaction.price) * transaction.amount) | round(2) }}</td>
                         <td>
                             <div class="buy-sell-form">
                                 <form method="POST" action="{{ url_for('trade') }}">
                                     <input type="hidden" name="coin_id" value="{{ transaction.coin_id }}">
                                     <input type="hidden" name="current_price" value="{{ current_prices.get(transaction.coin_id, 0) }}">
                                     <input type="hidden" name="wallet_id" value="{{ transaction.wallet_id }}">
+                                    <input type="hidden" name="buy_transaction_id" value="{{ transaction.buy_transaction_id }}">
                                     <input type="hidden" name="source" value="portfolio">
-                                    <input type="number" name="amount" placeholder="Amount to Sell" step="0.00000001" min="0" required>
+                                    <input type="number" name="amount" placeholder="Amount to Sell" step="0.00000001" min="0" max="{{ transaction.amount }}" required>
                                     <button type="submit" name="action" value="sell">Sell</button>
                                 </form>
+                                <button class="view-portfolio-chart-btn" data-coin-id="{{ transaction.coin_id }}" data-coin-name="{{ transaction.coin_id.capitalize() }}">View Chart</button>
                             </div>
                         </td>
                     </tr>
                 {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7">No holdings in your portfolio.</td>
+                </tr>
             {% endif %}
         </table>
+        <canvas id="portfolioChart" width="400" height="200"></canvas>
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                {% if transactions %}
+                    renderInteractiveChart('portfolioChart', '{{ transactions[0].coin_id }}', '{{ transactions[0].coin_id.capitalize() }}');
+                {% endif %}
+
+                document.querySelectorAll('.view-portfolio-chart-btn').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const coinId = button.getAttribute('data-coin-id');
+                        const coinName = button.getAttribute('data-coin-name');
+                        renderInteractiveChart('portfolioChart', coinId, coinName);
+                    });
+                });
+            });
+        </script>
+        <div class="risk-metrics">
+            <h2>Risk Metrics</h2>
+            <table>
+                <tr>
+                    <th>Coin</th>
+                    <th>Sharpe Ratio</th>
+                    <th>Volatility (Annualized)</th>
+                    <th>Max Drawdown</th>
+                </tr>
+                {% if risk_metrics %}
+                    {% for coin_id, metrics in risk_metrics.items() %}
+                        <tr>
+                            <td>{{ coin_id }}</td>
+                            <td>{{ metrics.sharpe_ratio }}</td>
+                            <td>{{ metrics.volatility }}</td>
+                            <td>{{ metrics.max_drawdown }}</td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4">No risk metrics available.</td>
+                    </tr>
+                {% endif %}
+            </table>
+        </div>
+        <div class="correlation-matrix">
+            <h2>Asset Correlation Matrix</h2>
+            <canvas id="correlationHeatmap"></canvas>
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    {% if correlation_data is defined %}
+                        renderCorrelationHeatmap('correlationHeatmap', {{ correlation_data | tojson }});
+                    {% else %}
+                        renderCorrelationHeatmap('correlationHeatmap', { labels: [], matrix: [] });
+                    {% endif %}
+                });
+            </script>
+        </div>
         <h2>Archived Transactions (Sold Coins)</h2>
         <table>
             <tr>
@@ -486,5 +528,5 @@
             }
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'93bf1d479b301d7a',t:'MTc0NjYwNDA5OS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>

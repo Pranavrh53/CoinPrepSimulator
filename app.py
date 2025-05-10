@@ -9,6 +9,10 @@ import random
 import string
 import hashlib
 import time
+import numpy as np
+import pandas as pd
+from queue import Queue
+from threading import Lock
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -25,8 +29,14 @@ db_config = {
 # CoinGecko API
 COINGECKO_API = "https://api.coingecko.com/api/v3"
 COINS_PER_PAGE = 20
-CACHE_DURATION = 300  # Cache API responses for 5 minutes
+CACHE_DURATION = 600  # Cache API responses for 10 minutes (increased for historical data)
 api_cache = {}  # In-memory cache: {url: (response_data, timestamp)}
+
+# Request throttling
+REQUEST_LIMIT = 5  # Reduced to 5 requests per minute (safer for CoinGecko free tier)
+REQUEST_WINDOW = 60  # Window in seconds (1 minute)
+request_timestamps = Queue()
+request_lock = Lock()
 
 def get_db_connection():
     try:
@@ -38,7 +48,25 @@ def get_db_connection():
 def generate_verification_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
-def fetch_with_retry(url, retries=3, delay=5):
+def throttle_request():
+    with request_lock:
+        current_time = time.time()
+        # Remove timestamps older than the request window
+        while not request_timestamps.empty():
+            if current_time - request_timestamps.queue[0] > REQUEST_WINDOW:
+                request_timestamps.get()
+            else:
+                break
+        # Check if we can make a new request
+        if request_timestamps.qsize() >= REQUEST_LIMIT:
+            oldest_request = request_timestamps.queue[0]
+            sleep_time = REQUEST_WINDOW - (current_time - oldest_request) + 1
+            print(f"Rate limit reached. Sleeping for {sleep_time:.2f} seconds.")
+            time.sleep(sleep_time)
+        request_timestamps.put(current_time)
+
+def fetch_with_retry(url, retries=3, base_delay=10):
+    # Check cache first
     if url in api_cache:
         cached_data, timestamp = api_cache[url]
         if time.time() - timestamp < CACHE_DURATION:
@@ -46,7 +74,11 @@ def fetch_with_retry(url, retries=3, delay=5):
             return type('Response', (), {'text': json.dumps(cached_data), 'raise_for_status': lambda: None})()
         else:
             print(f"Cache expired for {url}")
-    
+
+    # Throttle the request
+    throttle_request()
+
+    # Attempt the request with exponential backoff
     for attempt in range(retries):
         try:
             print(f"Making API request to {url} (attempt {attempt + 1})")
@@ -57,6 +89,9 @@ def fetch_with_retry(url, retries=3, delay=5):
             return response
         except requests.RequestException as e:
             if attempt < retries - 1:
+                # Exponential backoff: delay = base_delay * (2 ^ attempt)
+                delay = base_delay * (2 ** attempt)
+                print(f"Request failed: {e}. Retrying in {delay} seconds...")
                 time.sleep(delay)
                 continue
             print(f"API request failed after {retries} attempts: {e}")
@@ -66,6 +101,83 @@ def fetch_with_retry(url, retries=3, delay=5):
                 return type('Response', (), {'text': json.dumps(cached_data), 'raise_for_status': lambda: None})()
             return None
     return None
+
+def calculate_risk_metrics(coin_ids, amounts, days=30):
+    risk_free_rate = 0.02 / 365  # Annual 2% risk-free rate, daily
+    metrics = {}
+    
+    for coin_id, amount in zip(coin_ids, amounts):
+        url = f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
+        response = fetch_with_retry(url)
+        if not response:
+            print(f"Failed to fetch historical data for {coin_id}. Skipping risk metrics.")
+            metrics[coin_id] = {'sharpe_ratio': 'N/A', 'volatility': 'N/A', 'max_drawdown': 'N/A'}
+            continue
+        
+        data = json.loads(response.text)
+        prices = [item[1] for item in data.get('prices', [])]
+        if len(prices) < 2:
+            print(f"Insufficient historical data for {coin_id}. Skipping risk metrics.")
+            metrics[coin_id] = {'sharpe_ratio': 'N/A', 'volatility': 'N/A', 'max_drawdown': 'N/A'}
+            continue
+
+        # Calculate daily returns
+        returns = np.diff(prices) / prices[:-1]
+        
+        # Sharpe Ratio
+        mean_return = np.mean(returns)
+        std_return = np.std(returns) if len(returns) > 1 else 0
+        sharpe_ratio = (mean_return - risk_free_rate) / std_return if std_return > 0 else 'N/A'
+        
+        # Volatility
+        volatility = std_return * np.sqrt(365) if std_return > 0 else 'N/A'  # Annualized
+        
+        # Maximum Drawdown
+        cumulative = np.cumprod(1 + returns)
+        peak = np.maximum.accumulate(cumulative)
+        drawdown = (peak - cumulative) / peak
+        max_drawdown = np.max(drawdown) if len(drawdown) > 0 else 'N/A'
+        
+        metrics[coin_id] = {
+            'sharpe_ratio': round(sharpe_ratio, 2) if isinstance(sharpe_ratio, (int, float)) else 'N/A',
+            'volatility': round(volatility, 4) if isinstance(volatility, (int, float)) else 'N/A',
+            'max_drawdown': round(max_drawdown, 4) if isinstance(max_drawdown, (int, float)) else 'N/A'
+        }
+    
+    return metrics
+
+def calculate_correlation_matrix(coin_ids, days=30):
+    if not coin_ids:
+        return {'labels': [], 'matrix': []}
+    
+    prices_dict = {}
+    for coin_id in coin_ids:
+        url = f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
+        response = fetch_with_retry(url)
+        if response:
+            data = json.loads(response.text)
+            prices_dict[coin_id] = [item[1] for item in data.get('prices', [])]
+        else:
+            print(f"Failed to fetch historical data for {coin_id}. Excluding from correlation matrix.")
+            prices_dict[coin_id] = []  # Empty list to exclude this coin
+    
+    # Filter out coins with insufficient data
+    valid_coins = [coin_id for coin_id, prices in prices_dict.items() if len(prices) >= 2]
+    if not valid_coins:
+        return {'labels': coin_ids, 'matrix': []}
+    
+    # Ensure all price series have the same length
+    min_length = min(len(prices) for coin_id, prices in prices_dict.items() if coin_id in valid_coins)
+    if min_length < 2:
+        return {'labels': valid_coins, 'matrix': []}
+    
+    df = pd.DataFrame({coin_id: prices[:min_length] for coin_id, prices in prices_dict.items() if coin_id in valid_coins})
+    returns = df.pct_change().dropna()
+    if returns.empty:
+        return {'labels': valid_coins, 'matrix': []}
+    
+    corr_matrix = returns.corr().values.tolist()
+    return {'labels': valid_coins, 'matrix': corr_matrix}
 
 @app.route('/')
 def index():
@@ -336,18 +448,7 @@ def trade():
                 purchase_price = weighted_price_sum / amount
 
             cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (total_cost, session['user_id']))
-            buy_transaction_id = None
-            remaining_to_sell = amount
-            for buy in buy_transactions:
-                cursor.execute(
-                    "SELECT SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'sell' AND buy_transaction_id = %s",
-                    (session['user_id'], wallet_id, coin_id, buy['id'])
-                )
-                already_sold = float(cursor.fetchone()['total_sold'] or 0)
-                available_from_this_buy = float(buy['amount']) - already_sold
-                if available_from_this_buy > 0:
-                    buy_transaction_id = buy['id']
-                    break
+            buy_transaction_id = request.form.get('buy_transaction_id')
 
             cursor.execute(
                 "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
@@ -421,6 +522,7 @@ def portfolio():
     sold_transactions = []
     total_profit = 0.0
     current_prices = {}
+    risk_metrics = {}
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
@@ -441,38 +543,45 @@ def portfolio():
                 cursor.close()
                 conn.close()
 
-    # Calculate total bought and sold amounts per coin and wallet
+    # Fetch individual buy transactions and calculate remaining amounts
     conn = get_db_connection()
-    holdings = {}
+    transactions = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            # Fetch all buy transactions
-            cursor.execute("SELECT wallet_id, coin_id, SUM(amount) as total_amount, AVG(price) as avg_price "
-                         "FROM transactions WHERE user_id = %s AND type = 'buy' "
-                         "GROUP BY wallet_id, coin_id", (session['user_id'],))
+            # Fetch all buy transactions ordered by ID (FIFO)
+            cursor.execute("SELECT id, wallet_id, coin_id, amount, price FROM transactions WHERE user_id = %s AND type = 'buy' ORDER BY id ASC",
+                          (session['user_id'],))
             buy_transactions = cursor.fetchall()
 
-            # Fetch all sell transactions
-            cursor.execute("SELECT wallet_id, coin_id, SUM(amount) as total_sold "
-                         "FROM transactions WHERE user_id = %s AND type = 'sell' "
-                         "GROUP BY wallet_id, coin_id", (session['user_id'],))
+            # Fetch all sell transactions to calculate remaining amounts
+            cursor.execute("SELECT wallet_id, coin_id, buy_transaction_id, amount FROM transactions WHERE user_id = %s AND type = 'sell'",
+                          (session['user_id'],))
             sell_transactions = cursor.fetchall()
-            sell_dict = {(s['wallet_id'], s['coin_id']): s['total_sold'] for s in sell_transactions}
 
-            # Calculate remaining amounts
+            # Create a dictionary to track sold amounts per buy transaction
+            sold_amounts = {}
+            for sell in sell_transactions:
+                buy_id = sell['buy_transaction_id']
+                if buy_id:
+                    if buy_id not in sold_amounts:
+                        sold_amounts[buy_id] = 0.0
+                    sold_amounts[buy_id] += float(sell['amount'] or 0)
+
+            # Process each buy transaction to calculate remaining amount
             for buy in buy_transactions:
-                key = (buy['wallet_id'], buy['coin_id'])
-                total_bought = float(buy['total_amount'] or 0)
-                total_sold = float(sell_dict.get(key, 0) or 0)
+                buy_id = buy['id']
+                total_bought = float(buy['amount'] or 0)
+                total_sold = sold_amounts.get(buy_id, 0.0)
                 remaining_amount = total_bought - total_sold
-                if remaining_amount > 0:  # Only include coins with remaining amounts
-                    holdings[key] = {
+                if remaining_amount > 0:
+                    transactions.append({
                         'wallet_id': buy['wallet_id'],
                         'coin_id': buy['coin_id'],
                         'amount': remaining_amount,
-                        'price': float(buy['avg_price'] or 0)
-                    }
+                        'price': float(buy['price'] or 0),
+                        'buy_transaction_id': buy_id
+                    })
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
@@ -480,17 +589,31 @@ def portfolio():
                 cursor.close()
                 conn.close()
 
-    # Convert holdings to transactions list for the template
-    transactions = list(holdings.values())
+    coin_ids = list(set(t['coin_id'] for t in transactions + sold_transactions))
+    amounts = [t['amount'] for t in transactions if t['coin_id'] in coin_ids]
 
-    # Fetch current prices for the coins in the portfolio
-    coin_ids = ','.join(set(t['coin_id'] for t in transactions + sold_transactions)) or 'bitcoin'
-    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}")
+    # Calculate risk metrics
+    if coin_ids:
+        risk_metrics = calculate_risk_metrics(coin_ids, amounts)
+
+    # Calculate correlation matrix
+    correlation_data = calculate_correlation_matrix(coin_ids)
+
+    # Fetch current prices
+    coin_ids_str = ','.join(coin_ids) or 'bitcoin'
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}")
     if response:
         data = json.loads(response.text)
-        current_prices = {coin['id']: coin['current_price'] for coin in data if 'current_price' in coin}
+        current_prices = {coin['id']: float(coin['current_price']) for coin in data if 'current_price' in coin}
     else:
         flash("Failed to fetch current prices. Using cached data if available.", "warning")
+        # Fallback to cached data if available
+        cached_url = f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}"
+        if cached_url in api_cache:
+            cached_data, _ = api_cache[cached_url]
+            current_prices = {coin['id']: float(coin['current_price']) for coin in cached_data if 'current_price' in coin}
+        else:
+            current_prices = {coin_id: 0.0 for coin_id in coin_ids}
 
     # Fetch user's wallets
     conn = get_db_connection()
@@ -507,7 +630,7 @@ def portfolio():
                 cursor.close()
                 conn.close()
 
-    return render_template('combined.html', section='portfolio', transactions=transactions, sold_transactions=sold_transactions, total_profit=total_profit, current_prices=current_prices, wallets=user_wallets)
+    return render_template('combined.html', section='portfolio', transactions=transactions, sold_transactions=sold_transactions, total_profit=total_profit, current_prices=current_prices, wallets=user_wallets, risk_metrics=risk_metrics, correlation_data=correlation_data)
 
 @app.route('/watchlist', methods=['GET', 'POST'])
 def watchlist():
@@ -519,16 +642,13 @@ def watchlist():
         flash("Database connection failed", "error")
         return redirect(url_for('dashboard'))
 
-    # Fetch a list of available coins for the dropdown
     available_coins = []
     response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false")
     if response:
         available_coins = json.loads(response.text)
     else:
         flash("Failed to fetch coin list for dropdown. Using cached data if available.", "warning")
-        available_coins = []
 
-    # Handle POST requests for adding or removing coins
     if request.method == 'POST':
         action = request.form.get('action')
         coin_id = request.form.get('coin_id', '').lower().strip()
@@ -541,13 +661,11 @@ def watchlist():
             cursor = conn.cursor(dictionary=True)
 
             if action == 'add':
-                # Verify the coin exists in CoinGecko
                 coin_exists = any(coin['id'] == coin_id for coin in available_coins)
                 if not coin_exists:
                     flash(f"Coin '{coin_id}' not found. Please select a valid coin.", "error")
                     return redirect(url_for('watchlist'))
 
-                # Check if the coin is already in the watchlist
                 cursor.execute("SELECT * FROM watchlist WHERE user_id = %s AND coin_id = %s", (session['user_id'], coin_id))
                 if cursor.fetchone():
                     flash(f"'{coin_id}' is already in your watchlist.", "warning")
@@ -557,7 +675,6 @@ def watchlist():
                     flash(f"'{coin_id}' added to your watchlist!", "success")
 
             elif action == 'remove':
-                # Remove the coin from the watchlist
                 cursor.execute("DELETE FROM watchlist WHERE user_id = %s AND coin_id = %s", (session['user_id'], coin_id))
                 if cursor.rowcount > 0:
                     conn.commit()
@@ -573,7 +690,6 @@ def watchlist():
                 conn.close()
         return redirect(url_for('watchlist'))
 
-    # Fetch the user's watchlist
     watchlist = []
     try:
         cursor = conn.cursor(dictionary=True)
@@ -586,14 +702,12 @@ def watchlist():
             cursor.close()
             conn.close()
 
-    # Fetch live data for watchlist coins
     coins = []
     if watchlist:
         coin_ids = ','.join([w['coin_id'] for w in watchlist])
         response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}&order=market_cap_desc&sparkline=false")
         if response:
             coins = json.loads(response.text)
-            # Ensure all watchlist coins are displayed, even if API fails to fetch some
             watchlist_ids = set(w['coin_id'] for w in watchlist)
             fetched_ids = set(coin['id'] for coin in coins)
             missing_coins = watchlist_ids - fetched_ids
@@ -675,8 +789,33 @@ def historical(coin_id):
         data = json.loads(response.text)
         dates = [datetime.fromtimestamp(item[0]/1000).strftime('%Y-%m-%d') for item in data['prices']]
         prices = [item[1] for item in data['prices']]
-        return jsonify({'dates': dates, 'prices': prices})
+        volumes = [item[1] for item in data['total_volumes']]
+        market_caps = [item[1] for item in data['market_caps']]
+        return jsonify({
+            'dates': dates,
+            'prices': prices,
+            'volumes': volumes,
+            'market_caps': market_caps
+        })
     return jsonify({'error': 'Failed to fetch historical data'}), 500
+
+@app.route('/correlation_matrix')
+def correlation_matrix():
+    conn = get_db_connection()
+    coin_ids = []
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT DISTINCT coin_id FROM transactions WHERE user_id = %s", (session['user_id'],))
+            coin_ids = [row['coin_id'] for row in cursor.fetchall()]
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    correlation_data = calculate_correlation_matrix(coin_ids)
+    return jsonify(correlation_data)
 
 @app.route('/achievements')
 def achievements():
