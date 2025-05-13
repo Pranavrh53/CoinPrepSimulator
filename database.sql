@@ -50,6 +50,17 @@ CREATE TABLE IF NOT EXISTS price_alerts (
     alert_type ENUM('above', 'below'),
     order_type ENUM('limit', 'market', 'stop'),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notified TINYINT(1) DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    coin_id VARCHAR(50),
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_read TINYINT(1) DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 

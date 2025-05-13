@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from queue import Queue
 from threading import Lock
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -29,11 +30,12 @@ db_config = {
 # CoinGecko API
 COINGECKO_API = "https://api.coingecko.com/api/v3"
 COINS_PER_PAGE = 20
-CACHE_DURATION = 600  # Cache API responses for 10 minutes (increased for historical data)
+CACHE_DURATION = 600  # Cache API responses for 10 minutes
 api_cache = {}  # In-memory cache: {url: (response_data, timestamp)}
+CHECK_INTERVAL = 300  # Check prices every 5 minutes
 
 # Request throttling
-REQUEST_LIMIT = 5  # Reduced to 5 requests per minute (safer for CoinGecko free tier)
+REQUEST_LIMIT = 5  # Requests per minute
 REQUEST_WINDOW = 60  # Window in seconds (1 minute)
 request_timestamps = Queue()
 request_lock = Lock()
@@ -51,13 +53,11 @@ def generate_verification_code():
 def throttle_request():
     with request_lock:
         current_time = time.time()
-        # Remove timestamps older than the request window
         while not request_timestamps.empty():
             if current_time - request_timestamps.queue[0] > REQUEST_WINDOW:
                 request_timestamps.get()
             else:
                 break
-        # Check if we can make a new request
         if request_timestamps.qsize() >= REQUEST_LIMIT:
             oldest_request = request_timestamps.queue[0]
             sleep_time = REQUEST_WINDOW - (current_time - oldest_request) + 1
@@ -66,7 +66,6 @@ def throttle_request():
         request_timestamps.put(current_time)
 
 def fetch_with_retry(url, retries=3, base_delay=10):
-    # Check cache first
     if url in api_cache:
         cached_data, timestamp = api_cache[url]
         if time.time() - timestamp < CACHE_DURATION:
@@ -75,10 +74,7 @@ def fetch_with_retry(url, retries=3, base_delay=10):
         else:
             print(f"Cache expired for {url}")
 
-    # Throttle the request
     throttle_request()
-
-    # Attempt the request with exponential backoff
     for attempt in range(retries):
         try:
             print(f"Making API request to {url} (attempt {attempt + 1})")
@@ -89,7 +85,6 @@ def fetch_with_retry(url, retries=3, base_delay=10):
             return response
         except requests.RequestException as e:
             if attempt < retries - 1:
-                # Exponential backoff: delay = base_delay * (2 ^ attempt)
                 delay = base_delay * (2 ** attempt)
                 print(f"Request failed: {e}. Retrying in {delay} seconds...")
                 time.sleep(delay)
@@ -102,10 +97,57 @@ def fetch_with_retry(url, retries=3, base_delay=10):
             return None
     return None
 
+def check_price_alerts():
+    print("Checking price alerts...")
+    conn = get_db_connection()
+    if not conn:
+        print("Database connection failed in price alert check")
+        return
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM price_alerts WHERE notified = 0")
+        alerts = cursor.fetchall()
+        if not alerts:
+            return
+        coin_ids = list(set(alert['coin_id'] for alert in alerts))
+        coin_ids_str = ','.join(coin_ids)
+        response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}")
+        if not response:
+            print("Failed to fetch prices for alerts")
+            return
+        prices = {coin['id']: float(coin['current_price']) for coin in json.loads(response.text) if 'current_price' in coin}
+        for alert in alerts:
+            coin_id = alert['coin_id']
+            current_price = prices.get(coin_id)
+            if current_price is None:
+                continue
+            target_price = float(alert['target_price'])
+            alert_type = alert['alert_type']
+            triggered = (alert_type == 'above' and current_price >= target_price) or (alert_type == 'below' and current_price <= target_price)
+            if triggered:
+                message = f"Alert: {coin_id.capitalize()} has {alert_type} ${target_price:.2f}. Current price: ${current_price:.2f}."
+                cursor.execute(
+                    "INSERT INTO notifications (user_id, coin_id, message) VALUES (%s, %s, %s)",
+                    (alert['user_id'], coin_id, message)
+                )
+                cursor.execute("UPDATE price_alerts SET notified = 1 WHERE id = %s", (alert['id'],))
+                conn.commit()
+                print(f"Notification triggered for user {alert['user_id']}: {message}")
+    except mysql.connector.Error as err:
+        print(f"Database error in price alert check: {err}")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+# Start background scheduler
+scheduler = BackgroundScheduler()
+scheduler.add_job(check_price_alerts, 'interval', seconds=CHECK_INTERVAL)
+scheduler.start()
+
 def calculate_risk_metrics(coin_ids, amounts, days=30):
-    risk_free_rate = 0.02 / 365  # Annual 2% risk-free rate, daily
+    risk_free_rate = 0.02 / 365
     metrics = {}
-    
     for coin_id, amount in zip(coin_ids, amounts):
         url = f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
         response = fetch_with_retry(url)
@@ -113,43 +155,31 @@ def calculate_risk_metrics(coin_ids, amounts, days=30):
             print(f"Failed to fetch historical data for {coin_id}. Skipping risk metrics.")
             metrics[coin_id] = {'sharpe_ratio': 'N/A', 'volatility': 'N/A', 'max_drawdown': 'N/A'}
             continue
-        
         data = json.loads(response.text)
         prices = [item[1] for item in data.get('prices', [])]
         if len(prices) < 2:
             print(f"Insufficient historical data for {coin_id}. Skipping risk metrics.")
             metrics[coin_id] = {'sharpe_ratio': 'N/A', 'volatility': 'N/A', 'max_drawdown': 'N/A'}
             continue
-
-        # Calculate daily returns
         returns = np.diff(prices) / prices[:-1]
-        
-        # Sharpe Ratio
         mean_return = np.mean(returns)
         std_return = np.std(returns) if len(returns) > 1 else 0
         sharpe_ratio = (mean_return - risk_free_rate) / std_return if std_return > 0 else 'N/A'
-        
-        # Volatility
-        volatility = std_return * np.sqrt(365) if std_return > 0 else 'N/A'  # Annualized
-        
-        # Maximum Drawdown
+        volatility = std_return * np.sqrt(365) if std_return > 0 else 'N/A'
         cumulative = np.cumprod(1 + returns)
         peak = np.maximum.accumulate(cumulative)
         drawdown = (peak - cumulative) / peak
         max_drawdown = np.max(drawdown) if len(drawdown) > 0 else 'N/A'
-        
         metrics[coin_id] = {
             'sharpe_ratio': round(sharpe_ratio, 2) if isinstance(sharpe_ratio, (int, float)) else 'N/A',
             'volatility': round(volatility, 4) if isinstance(volatility, (int, float)) else 'N/A',
             'max_drawdown': round(max_drawdown, 4) if isinstance(max_drawdown, (int, float)) else 'N/A'
         }
-    
     return metrics
 
 def calculate_correlation_matrix(coin_ids, days=30):
     if not coin_ids:
         return {'labels': [], 'matrix': []}
-    
     prices_dict = {}
     for coin_id in coin_ids:
         url = f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
@@ -159,23 +189,17 @@ def calculate_correlation_matrix(coin_ids, days=30):
             prices_dict[coin_id] = [item[1] for item in data.get('prices', [])]
         else:
             print(f"Failed to fetch historical data for {coin_id}. Excluding from correlation matrix.")
-            prices_dict[coin_id] = []  # Empty list to exclude this coin
-    
-    # Filter out coins with insufficient data
+            prices_dict[coin_id] = []
     valid_coins = [coin_id for coin_id, prices in prices_dict.items() if len(prices) >= 2]
     if not valid_coins:
         return {'labels': coin_ids, 'matrix': []}
-    
-    # Ensure all price series have the same length
     min_length = min(len(prices) for coin_id, prices in prices_dict.items() if coin_id in valid_coins)
     if min_length < 2:
         return {'labels': valid_coins, 'matrix': []}
-    
     df = pd.DataFrame({coin_id: prices[:min_length] for coin_id, prices in prices_dict.items() if coin_id in valid_coins})
     returns = df.pct_change().dropna()
     if returns.empty:
         return {'labels': valid_coins, 'matrix': []}
-    
     corr_matrix = returns.corr().values.tolist()
     return {'labels': valid_coins, 'matrix': corr_matrix}
 
@@ -316,18 +340,40 @@ def dashboard():
         flash("Failed to fetch market data. Please try again later.", "error")
     conn = get_db_connection()
     user = None
+    notifications = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT crypto_bucks, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
+            cursor.execute("SELECT id, coin_id, message, created_at FROM notifications WHERE user_id = %s AND is_read = 0 ORDER BY created_at DESC", (session['user_id'],))
+            notifications = cursor.fetchall()
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='dashboard', coins=coins, user=user)
+    return render_template('combined.html', section='dashboard', coins=coins, user=user, notifications=notifications)
+
+@app.route('/mark_notification_read/<int:notification_id>', methods=['POST'])
+def mark_notification_read(notification_id):
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = %s AND user_id = %s", (notification_id, session['user_id']))
+            conn.commit()
+            flash("Notification marked as read.", "success")
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    return redirect(url_for('dashboard'))
 
 @app.route('/live_market')
 def live_market():
@@ -340,7 +386,7 @@ def live_market():
         coins = json.loads(response.text)
     else:
         flash("Failed to fetch live market data. Using cached data if available.", "warning")
-    total_coins = 1000  # Approximate total coins for pagination
+    total_coins = 1000
     total_pages = (total_coins + COINS_PER_PAGE - 1) // COINS_PER_PAGE
     conn = get_db_connection()
     user_wallets = []
@@ -419,11 +465,9 @@ def trade():
             )
             total_sold = float(cursor.fetchone()['total'] or 0)
             available = total_bought - total_sold
-
             if amount > available:
                 flash("Insufficient coin amount to sell", "error")
                 return redirect(url_for(source))
-
             remaining_to_sell = amount
             purchase_price = 0.0
             weighted_price_sum = 0.0
@@ -436,23 +480,17 @@ def trade():
                 )
                 already_sold = float(cursor.fetchone()['total_sold'] or 0)
                 available_from_this_buy = float(buy['amount']) - already_sold
-
                 if available_from_this_buy <= 0:
                     continue
-
                 amount_to_use = min(remaining_to_sell, available_from_this_buy)
                 weighted_price_sum += amount_to_use * float(buy['price'])
                 remaining_to_sell -= amount_to_use
-
             if amount > 0:
                 purchase_price = weighted_price_sum / amount
-
             cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (total_cost, session['user_id']))
-            buy_transaction_id = request.form.get('buy_transaction_id')
-
             cursor.execute(
                 "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy_transaction_id)
+                (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy['id'])
             )
         conn.commit()
         flash(f"Successfully {action} {amount} {coin_id}", "success")
@@ -498,7 +536,6 @@ def portfolio():
                     wallet_id = existing_wallets[0][0]
                 else:
                     wallet_id = int(wallet_id) if wallet_id else existing_wallets[0][0]
-                
                 cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
                 crypto_bucks = float(cursor.fetchone()[0])
                 total_cost = amount * purchase_price
@@ -516,8 +553,6 @@ def portfolio():
                 if conn.is_connected():
                     cursor.close()
                     conn.close()
-
-    # Fetch all transactions for the user
     conn = get_db_connection()
     sold_transactions = []
     total_profit = 0.0
@@ -528,7 +563,6 @@ def portfolio():
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT * FROM transactions WHERE user_id = %s AND type = 'sell'", (session['user_id'],))
             sold_transactions = cursor.fetchall()
-            
             for transaction in sold_transactions:
                 transaction['price'] = float(transaction['price']) if transaction['price'] is not None else 0.0
                 transaction['sold_price'] = float(transaction['sold_price']) if transaction['sold_price'] is not None else 0.0
@@ -542,24 +576,17 @@ def portfolio():
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-
-    # Fetch individual buy transactions and calculate remaining amounts
     conn = get_db_connection()
     transactions = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            # Fetch all buy transactions ordered by ID (FIFO)
             cursor.execute("SELECT id, wallet_id, coin_id, amount, price FROM transactions WHERE user_id = %s AND type = 'buy' ORDER BY id ASC",
                           (session['user_id'],))
             buy_transactions = cursor.fetchall()
-
-            # Fetch all sell transactions to calculate remaining amounts
             cursor.execute("SELECT wallet_id, coin_id, buy_transaction_id, amount FROM transactions WHERE user_id = %s AND type = 'sell'",
                           (session['user_id'],))
             sell_transactions = cursor.fetchall()
-
-            # Create a dictionary to track sold amounts per buy transaction
             sold_amounts = {}
             for sell in sell_transactions:
                 buy_id = sell['buy_transaction_id']
@@ -567,8 +594,6 @@ def portfolio():
                     if buy_id not in sold_amounts:
                         sold_amounts[buy_id] = 0.0
                     sold_amounts[buy_id] += float(sell['amount'] or 0)
-
-            # Process each buy transaction to calculate remaining amount
             for buy in buy_transactions:
                 buy_id = buy['id']
                 total_bought = float(buy['amount'] or 0)
@@ -588,18 +613,11 @@ def portfolio():
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-
     coin_ids = list(set(t['coin_id'] for t in transactions + sold_transactions))
     amounts = [t['amount'] for t in transactions if t['coin_id'] in coin_ids]
-
-    # Calculate risk metrics
     if coin_ids:
         risk_metrics = calculate_risk_metrics(coin_ids, amounts)
-
-    # Calculate correlation matrix
     correlation_data = calculate_correlation_matrix(coin_ids)
-
-    # Fetch current prices
     coin_ids_str = ','.join(coin_ids) or 'bitcoin'
     response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}")
     if response:
@@ -607,15 +625,12 @@ def portfolio():
         current_prices = {coin['id']: float(coin['current_price']) for coin in data if 'current_price' in coin}
     else:
         flash("Failed to fetch current prices. Using cached data if available.", "warning")
-        # Fallback to cached data if available
         cached_url = f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}"
         if cached_url in api_cache:
             cached_data, _ = api_cache[cached_url]
             current_prices = {coin['id']: float(coin['current_price']) for coin in cached_data if 'current_price' in coin}
         else:
             current_prices = {coin_id: 0.0 for coin_id in coin_ids}
-
-    # Fetch user's wallets
     conn = get_db_connection()
     user_wallets = []
     if conn:
@@ -629,43 +644,35 @@ def portfolio():
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-
     return render_template('combined.html', section='portfolio', transactions=transactions, sold_transactions=sold_transactions, total_profit=total_profit, current_prices=current_prices, wallets=user_wallets, risk_metrics=risk_metrics, correlation_data=correlation_data)
 
 @app.route('/watchlist', methods=['GET', 'POST'])
 def watchlist():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
-
     conn = get_db_connection()
     if conn is None:
         flash("Database connection failed", "error")
         return redirect(url_for('dashboard'))
-
     available_coins = []
     response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false")
     if response:
         available_coins = json.loads(response.text)
     else:
         flash("Failed to fetch coin list for dropdown. Using cached data if available.", "warning")
-
     if request.method == 'POST':
         action = request.form.get('action')
         coin_id = request.form.get('coin_id', '').lower().strip()
-
         if not coin_id:
             flash("Coin ID is required", "error")
             return redirect(url_for('watchlist'))
-
         try:
             cursor = conn.cursor(dictionary=True)
-
             if action == 'add':
                 coin_exists = any(coin['id'] == coin_id for coin in available_coins)
                 if not coin_exists:
                     flash(f"Coin '{coin_id}' not found. Please select a valid coin.", "error")
                     return redirect(url_for('watchlist'))
-
                 cursor.execute("SELECT * FROM watchlist WHERE user_id = %s AND coin_id = %s", (session['user_id'], coin_id))
                 if cursor.fetchone():
                     flash(f"'{coin_id}' is already in your watchlist.", "warning")
@@ -673,7 +680,6 @@ def watchlist():
                     cursor.execute("INSERT INTO watchlist (user_id, coin_id) VALUES (%s, %s)", (session['user_id'], coin_id))
                     conn.commit()
                     flash(f"'{coin_id}' added to your watchlist!", "success")
-
             elif action == 'remove':
                 cursor.execute("DELETE FROM watchlist WHERE user_id = %s AND coin_id = %s", (session['user_id'], coin_id))
                 if cursor.rowcount > 0:
@@ -681,7 +687,6 @@ def watchlist():
                     flash(f"'{coin_id}' removed from your watchlist!", "success")
                 else:
                     flash(f"'{coin_id}' not found in your watchlist.", "warning")
-
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
@@ -689,7 +694,6 @@ def watchlist():
                 cursor.close()
                 conn.close()
         return redirect(url_for('watchlist'))
-
     watchlist = []
     try:
         cursor = conn.cursor(dictionary=True)
@@ -701,7 +705,6 @@ def watchlist():
         if conn.is_connected():
             cursor.close()
             conn.close()
-
     coins = []
     if watchlist:
         coin_ids = ','.join([w['coin_id'] for w in watchlist])
@@ -727,7 +730,6 @@ def watchlist():
                      for w in watchlist]
     else:
         flash("Your watchlist is empty. Add some coins to track!", "info")
-
     return render_template('combined.html', section='watchlist', coins=coins, available_coins=available_coins)
 
 @app.route('/alerts', methods=['GET', 'POST'])
@@ -751,7 +753,7 @@ def alerts():
         if conn:
             try:
                 cursor = conn.cursor()
-                cursor.execute("INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type, order_type) VALUES (%s, %s, %s, %s, %s)",
+                cursor.execute("INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type, order_type, notified) VALUES (%s, %s, %s, %s, %s, 0)",
                               (session['user_id'], coin_id, target_price, alert_type, order_type))
                 conn.commit()
                 flash("Alert set successfully", "success")
@@ -868,4 +870,7 @@ def update_achievements():
     return redirect(url_for('achievements'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    try:
+        app.run(debug=True)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
