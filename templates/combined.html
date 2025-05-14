@@ -6,20 +6,18 @@
     <title>CryptoTracker</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
     <style>
-        body { background-color: #f8f9fa; }
-        .container { max-width: 1200px; margin-top: 20px; }
-        .table { background-color: white; }
-        .navbar-brand { font-weight: bold; }
-        .alert-dismissible { position: relative; }
-        .chart-container { width: 100%; height: 400px; }
+        body { padding-top: 20px; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        .table th, .table td { vertical-align: middle; }
+        .navbar-brand, .nav-link { font-weight: 500; }
     </style>
 </head>
 <body>
     <div class="container">
         {% if section == 'login' %}
-            <h2>Login</h2>
+            <h2 class="mb-4">Login</h2>
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -36,7 +34,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endif %}
-            <form method="POST" action="{{ url_for('login') }}">
+            <form method="POST" action="{{ url_for('login') }}" class="mb-3">
                 <div class="mb-3">
                     <label for="username" class="form-label">Username</label>
                     <input type="text" class="form-control" id="username" name="username" required>
@@ -47,16 +45,17 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Login</button>
             </form>
-            <p class="mt-3">Don't have an account? <a href="{{ url_for('register') }}">Register</a></p>
+            <p>Don't have an account? <a href="{{ url_for('register') }}">Register</a></p>
+
         {% elif section == 'register' %}
-            <h2>Register</h2>
+            <h2 class="mb-4">Register</h2>
             {% if error %}
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     {{ error }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endif %}
-            <form method="POST" action="{{ url_for('register') }}">
+            <form method="POST" action="{{ url_for('register') }}" class="mb-3">
                 <div class="mb-3">
                     <label for="username" class="form-label">Username</label>
                     <input type="text" class="form-control" id="username" name="username" required>
@@ -71,9 +70,10 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Register</button>
             </form>
-            <p class="mt-3">Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+            <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+
         {% elif section == 'verify' %}
-            <h2>Verify Your Account</h2>
+            <h2 class="mb-4">Verify Your Account</h2>
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -91,17 +91,18 @@
                 </div>
             {% endif %}
             <p>A verification code has been sent to your email. Please enter it below.</p>
-            <form method="POST" action="{{ url_for('verify', email=email) }}">
+            <form method="POST" action="{{ url_for('verify', email=email) }}" class="mb-3">
                 <div class="mb-3">
                     <label for="code" class="form-label">Verification Code</label>
                     <input type="text" class="form-control" id="code" name="code" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Verify</button>
             </form>
-            <p class="mt-3"><a href="{{ url_for('login') }}">Back to Login</a></p>
+            <p><a href="{{ url_for('login') }}">Back to Login</a></p>
+
         {% elif section == 'dashboard' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-                <a class="navbar-brand" href="#">CryptoTracker</a>
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}">CryptoTracker</a>
                 <div class="navbar-nav">
                     <a class="nav-link" href="{{ url_for('live_market') }}">Live Market</a>
                     <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
@@ -122,18 +123,18 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3>Price Alert Notifications</h3>
-                <button class="btn btn-secondary" onclick="refreshNotifications()">Refresh Alerts</button>
-            </div>
-            <div id="notificationsContainer">
+            <h2>Price Alert Notifications</h2>
+            <form method="POST" action="{{ url_for('dashboard') }}" class="mb-3">
+    <button type="submit" class="btn btn-primary">Refresh Alerts</button>
+</form>
+            <div class="mb-4">
                 {% if triggered_alerts %}
                     {% for alert in triggered_alerts %}
-                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                            <strong>Alert!</strong> {{ alert.coin_id | capitalize }} price is {{ alert.alert_type }} ${{ alert.target_price | round(2) }} (Triggered at {{ alert.triggered_at }}).
-                            <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary">Trade Now</a>
-                            <form method="POST" action="{{ url_for('dismiss_alert', alert_id=alert.id) }}" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            Alert! {{ alert.coin_id | capitalize }} price is {{ alert.alert_type }} ${{ alert.target_price | round(2) }} (Triggered at {{ alert.triggered_at }}).
+                            <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary ms-2">Trade Now</a>
+                            <form method="POST" action="{{ url_for('dismiss_alert', alert_id=alert.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-danger ms-2">Dismiss</button>
                             </form>
                         </div>
                     {% endfor %}
@@ -141,43 +142,11 @@
                     <p>No new alerts at this time.</p>
                 {% endif %}
             </div>
-            <script>
-                function refreshNotifications() {
-                    fetch('/check_alerts')
-                        .then(response => response.json())
-                        .then(data => {
-                            const container = document.getElementById('notificationsContainer');
-                            container.innerHTML = '';
-                            if (data.triggered_alerts && data.triggered_alerts.length > 0) {
-                                data.triggered_alerts.forEach(alert => {
-                                    const alertDiv = document.createElement('div');
-                                    alertDiv.className = 'alert alert-warning alert-dismissible fade show';
-                                    alertDiv.role = 'alert';
-                                    alertDiv.innerHTML = `
-                                        <strong>Alert!</strong> ${alert.coin_id.charAt(0).toUpperCase() + alert.coin_id.slice(1)} price is ${alert.alert_type} $${alert.target_price.toFixed(2)} (Triggered at ${alert.triggered_at}).
-                                        <a href="/live_market" class="btn btn-sm btn-primary">Trade Now</a>
-                                        <form method="POST" action="/dismiss_alert/${alert.id}" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
-                                        </form>
-                                    `;
-                                    container.appendChild(alertDiv);
-                                });
-                            } else {
-                                container.innerHTML = '<p>No new alerts at this time.</p>';
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error refreshing notifications:', error);
-                            const container = document.getElementById('notificationsContainer');
-                            container.innerHTML = '<p>Error loading alerts. Please try again later.</p>';
-                        });
-                }
-            </script>
             {% if user %}
                 <p><strong>CryptoBucks Balance:</strong> ${{ user.crypto_bucks }}</p>
                 <p><strong>Risk Tolerance:</strong> {{ user.risk_tolerance }}</p>
             {% endif %}
-            <h3>Market Overview (Top Market Caps)</h3>
+            <h2>Market Overview (Top Market Caps)</h2>
             <table class="table table-striped">
                 <thead>
                     <tr>
@@ -197,7 +166,7 @@
                                 <td>{{ coin.price_change_percentage_24h }}%</td>
                                 <td>${{ coin.market_cap }}</td>
                                 <td>
-                                    <a href="#" class="btn btn-sm btn-info" onclick="showChart('{{ coin.id }}')">View Chart</a>
+                                    <button class="btn btn-sm btn-primary" onclick="showChart('{{ coin.id }}')">View Chart</button>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -284,6 +253,7 @@
                         });
                 }
             </script>
+
         {% elif section == 'live_market' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
@@ -318,24 +288,21 @@
                                 <td>{{ coin.price_change_percentage_24h }}%</td>
                                 <td>${{ coin.market_cap }}</td>
                                 <td>
-                                    <form method="POST" action="{{ url_for('trade') }}">
+                                    <form method="POST" action="{{ url_for('trade') }}" class="d-inline-block">
                                         <input type="hidden" name="coin_id" value="{{ coin.id }}">
+                                        <input type="number" name="amount" placeholder="Amount" step="0.0001" min="0" class="form-control d-inline-block w-auto" required>
                                         <input type="hidden" name="current_price" value="{{ coin.current_price }}">
-                                        <input type="hidden" name="source" value="live_market">
-                                        <div class="input-group input-group-sm mb-2">
-                                            <input type="number" class="form-control" name="amount" placeholder="Amount" step="0.00000001" required>
-                                            <select name="wallet_id" class="form-select" required>
-                                                <option value="" disabled selected>Select Wallet</option>
-                                                {% if wallets %}
-                                                    {% for wallet in wallets %}
-                                                        <option value="{{ wallet[0] }}">{{ wallet[1] }}</option>
-                                                    {% endfor %}
-                                                {% endif %}
-                                            </select>
-                                            <button type="submit" name="action" value="buy" class="btn btn-sm btn-success">Buy</button>
-                                        </div>
+                                        <select name="wallet_id" class="form-select d-inline-block w-auto" required>
+                                            <option value="" disabled selected>Select Wallet</option>
+                                            {% if wallets %}
+                                                {% for wallet in wallets %}
+                                                    <option value="{{ wallet[0] }}">{{ wallet[1] }}</option>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </select>
+                                        <button type="submit" name="action" value="buy" class="btn btn-sm btn-success">Buy</button>
                                     </form>
-                                    <a href="#" class="btn btn-sm btn-info" onclick="showChart('{{ coin.id }}')">View Chart</a>
+                                    <button class="btn btn-sm btn-primary mt-2" onclick="showChart('{{ coin.id }}')">View Chart</button>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -343,16 +310,22 @@
                 </tbody>
             </table>
             {% if section == 'live_market' %}
-                <nav>
-                    <ul class="pagination">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center">
                         {% if page > 1 %}
-                            <li class="page-item"><a class="page-link" href="{{ url_for('live_market', page=page-1) }}">Previous</a></li>
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('live_market', page=page-1) }}">Previous</a>
+                            </li>
                         {% endif %}
                         {% for p in range(1, total_pages + 1) %}
-                            <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ url_for('live_market', page=p) }}">{{ p }}</a></li>
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('live_market', page=p) }}">{{ p }}</a>
+                            </li>
                         {% endfor %}
                         {% if page < total_pages %}
-                            <li class="page-item"><a class="page-link" href="{{ url_for('live_market', page=page+1) }}">Next</a></li>
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('live_market', page=page+1) }}">Next</a>
+                            </li>
                         {% endif %}
                     </ul>
                 </nav>
@@ -437,6 +410,7 @@
                         });
                 }
             </script>
+
         {% elif section == 'portfolio' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
@@ -451,7 +425,7 @@
             </nav>
             <h2>Your Portfolio</h2>
             <h3>Add to Portfolio</h3>
-            <form method="POST" action="{{ url_for('portfolio') }}">
+            <form method="POST" action="{{ url_for('portfolio') }}" class="mb-4">
                 <div class="input-group mb-3">
                     <select name="wallet_id" class="form-select" required>
                         <option value="" disabled selected>Select Wallet</option>
@@ -462,8 +436,8 @@
                         {% endif %}
                     </select>
                     <input type="text" class="form-control" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
-                    <input type="number" class="form-control" name="amount" placeholder="Amount" step="0.00000001" required>
-                    <input type="number" class="form-control" name="purchase_price" placeholder="Purchase Price (USD)" step="0.01" required>
+                    <input type="number" class="form-control" name="amount" placeholder="Amount" step="0.0001" min="0" required>
+                    <input type="number" class="form-control" name="purchase_price" placeholder="Purchase Price (USD)" step="0.01" min="0" required>
                     <button type="submit" class="btn btn-primary">Add</button>
                 </div>
             </form>
@@ -491,23 +465,297 @@
                                 <td>${{ current_prices.get(transaction.coin_id, 0) | round(2) }}</td>
                                 <td>${{ ((current_prices.get(transaction.coin_id, 0) - transaction.price) * transaction.amount) | round(2) }}</td>
                                 <td>
-                                    <form method="POST" action="{{ url_for('trade') }}">
+                                    <form method="POST" action="{{ url_for('trade', source='portfolio') }}" class="d-inline-block">
                                         <input type="hidden" name="coin_id" value="{{ transaction.coin_id }}">
+                                        <input type="number" name="amount" placeholder="Amount" step="0.0001" min="0" max="{{ transaction.amount }}" class="form-control d-inline-block w-auto" required>
                                         <input type="hidden" name="current_price" value="{{ current_prices.get(transaction.coin_id, 0) }}">
                                         <input type="hidden" name="wallet_id" value="{{ transaction.wallet_id }}">
-                                        <input type="hidden" name="source" value="portfolio">
-                                        <input type="hidden" name="buy_transaction_id" value="{{ transaction.buy_transaction_id }}">
-                                        <div class="input-group input-group-sm mb-2">
-                                            <input type="number" class="form-control" name="amount" placeholder="Amount" step="0.00000001" required>
-                                            <button type="submit" name="action" value="sell" class="btn btn-sm btn-danger">Sell</button>
-                                        </div>
+                                        <button type="submit" name="action" value="sell" class="btn btn-sm btn-danger">Sell</button>
                                     </form>
-                                    <a href="#" class="btn btn-sm btn-info" onclick="showChart('{{ transaction.coin_id }}')">View Chart</a>
+                                    <button class="btn btn-sm btn-primary mt-2" onclick="showChart('{{ transaction.coin_id }}')">View Chart</button>
                                 </td>
                             </tr>
                         {% endfor %}
                     {% else %}
                         <tr><td colspan="7">No holdings in your portfolio.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+            <h3>Risk Metrics</h3>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Coin</th>
+                        <th>Sharpe Ratio</th>
+                        <th>Volatility (Annualized)</th>
+                        <th>Max Drawdown</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if risk_metrics %}
+                        {% for coin_id, metrics in risk_metrics.items() %}
+                            <tr>
+                                <td>{{ coin_id }}</td>
+                                <td>{{ metrics.sharpe_ratio }}</td>
+                                <td>{{ metrics.volatility }}</td>
+                                <td>{{ metrics.max_drawdown }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="4">No risk metrics available.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            <h3>Asset Correlation Matrix</h3>
+            <div class="chart-container">
+                <canvas id="correlationChart"></canvas>
+            </div>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    fetch('/correlation_matrix')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.labels || !data.matrix) return;
+                            const ctx = document.getElementById('correlationChart').getContext('2d');
+                            new Chart(ctx, {
+                                type: 'matrix',
+                                data: {
+                                    datasets: [{
+                                        label: 'Correlation Matrix',
+                                        data: data.matrix.flat().map((value, index) => ({
+                                            x: index % data.labels.length,
+                                            y: Math.floor(index / data.labels.length),
+                                            v: Math.round(value * 100) / 100
+                                        })),
+                                        backgroundColor: function(context) {
+                                            const value = context.dataset.data[context.dataIndex].v;
+                                            const alpha = Math.abs(value);
+                                            return value >= 0 ? `rgba(0, 128, 0, ${alpha})` : `rgba(255, 0, 0, ${alpha})`;
+                                        },
+                                        width: ({chart}) => (chart.chartArea || {}).width / data.labels.length - 1,
+                                        height: ({chart}) => (chart.chartArea || {}).height / data.labels.length - 1
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: { display: false },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(context) {
+                                                    const xLabel = data.labels[context.dataIndex.x];
+                                                    const yLabel = data.labels[context.dataIndex.y];
+                                                    const value = context.dataset.data[context.dataIndex].v;
+                                                    return `${xLabel} vs ${yLabel}: ${value.toFixed(2)}`;
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            type: 'category',
+                                            labels: data.labels,
+                                            offset: true,
+                                            ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 },
+                                            grid: { display: false }
+                                        },
+                                        y: {
+                                            type: 'category',
+                                            labels: data.labels,
+                                            offset: true,
+                                            grid: { display: false }
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                });
+
+                let chartInstance = null;
+                function showChart(coinId) {
+                    fetch(`/historical/${coinId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                alert(data.error);
+                                return;
+                            }
+                            const ctx = document.getElementById('priceChart').getContext('2d');
+                            if (chartInstance) {
+                                chartInstance.destroy();
+                            }
+                            chartInstance = new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: data.dates,
+                                    datasets: [
+                                        {
+                                            label: `${coinId.toUpperCase()} Price (USD)`,
+                                            data: data.prices,
+                                            borderColor: 'blue',
+                                            yAxisID: 'y-price',
+                                            fill: false
+                                        },
+                                        {
+                                            label: `${coinId.toUpperCase()} Volume (USD)`,
+                                            data: data.volumes,
+                                            borderColor: 'green',
+                                            yAxisID: 'y-volume',
+                                            fill: false
+                                        },
+                                        {
+                                            label: `${coinId.toUpperCase()} Market Cap (USD)`,
+                                            data: data.market_caps,
+                                            borderColor: 'red',
+                                            yAxisID: 'y-market-cap',
+                                            fill: false
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    scales: {
+                                        x: {
+                                            display: true,
+                                            title: { display: true, text: 'Date' }
+                                        },
+                                        'y-price': {
+                                            type: 'linear',
+                                            position: 'left',
+                                            display: true,
+                                            title: { display: true, text: 'Price (USD)' },
+                                            grid: { drawOnChartArea: false }
+                                        },
+                                        'y-volume': {
+                                            type: 'linear',
+                                            position: 'right',
+                                            display: true,
+                                            title: { display: true, text: 'Volume (USD)' },
+                                            grid: { drawOnChartArea: false }
+                                        },
+                                        'y-market-cap': {
+                                            type: 'linear',
+                                            position: 'right',
+                                            display: true,
+                                            title: { display: true, text: 'Market Cap (USD)' },
+                                            grid: { drawOnChartArea: false }
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                }
+            </script>
+            <h3>Archived Transactions (Sold Coins)</h3>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Wallet</th>
+                        <th>Coin</th>
+                        <th>Amount</th>
+                        <th>Purchase Price</th>
+                        <th>Sold Price</th>
+                        <th>Profit/Loss</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if sold_transactions %}
+                        {% for transaction in sold_transactions %}
+                            <tr>
+                                <td>Wallet {{ transaction.wallet_id }}</td>
+                                <td>{{ transaction.coin_id }}</td>
+                                <td>{{ transaction.amount }}</td>
+                                <td>${{ transaction.price | round(2) }}</td>
+                                <td>${{ transaction.sold_price | round(2) }}</td>
+                                <td>${{ transaction.profit | round(2) }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+            {% if total_profit is defined and sold_transactions %}
+                <p><strong>Total Profit/Loss from Sold Coins:</strong> ${{ total_profit | round(2) }}</p>
+            {% endif %}
+
+        {% elif section == 'watchlist' %}
+            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+                <div class="navbar-nav">
+                    <a class="nav-link" href="{{ url_for('live_market') }}">Live Market</a>
+                    <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
+                    <a class="nav-link" href="{{ url_for('alerts') }}">Price Alerts</a>
+                    <a class="nav-link" href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}">Achievements</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                </div>
+            </nav>
+            <h2>Your Watchlist</h2>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <h3>Add a Coin to Watch</h3>
+            <form method="POST" action="{{ url_for('watchlist') }}" class="mb-4">
+                <div class="input-group">
+                    {% if available_coins and available_coins|length > 0 %}
+                        <select name="coin_id" class="form-select" required>
+                            <option value="" disabled selected>Select a coin</option>
+                            {% for coin in available_coins %}
+                                <option value="{{ coin.id }}">{{ coin.name }} ({{ coin.symbol.upper() }})</option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        <input type="text" class="form-control" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
+                        <div class="alert alert-warning mt-2">No coins available in the dropdown. Please enter a Coin ID manually.</div>
+                    {% endif %}
+                    <input type="hidden" name="action" value="add">
+                    <button type="submit" class="btn btn-primary">Add to Watchlist</button>
+                </div>
+            </form>
+            <h3>Watched Coins</h3>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Coin</th>
+                        <th>Symbol</th>
+                        <th>Current Price (USD)</th>
+                        <th>24h Change</th>
+                        <th>Market Cap</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if coins %}
+                        {% for coin in coins %}
+                            <tr>
+                                <td>{{ coin.name }}</td>
+                                <td>{{ coin.symbol }}</td>
+                                <td>${{ coin.current_price | round(2) if coin.current_price != 'N/A' else 'N/A' }}</td>
+                                <td>{{ coin.price_change_percentage_24h | round(2) if coin.price_change_percentage_24h != 'N/A' else 'N/A' }}%</td>
+                                <td>${{ coin.market_cap if coin.market_cap != 'N/A' else 'N/A' }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('watchlist') }}" class="d-inline">
+                                        <input type="hidden" name="coin_id" value="{{ coin.id }}">
+                                        <input type="hidden" name="action" value="remove">
+                                        <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                                    </form>
+                                    <button class="btn btn-sm btn-primary mt-2" onclick="showChart('{{ coin.id }}')">View Chart</button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="6">No coins in your watchlist.</td></tr>
                     {% endif %}
                 </tbody>
             </table>
@@ -591,288 +839,7 @@
                         });
                 }
             </script>
-            <h3>Risk Metrics</h3>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Coin</th>
-                        <th>Sharpe Ratio</th>
-                        <th>Volatility (Annualized)</th>
-                        <th>Max Drawdown</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if risk_metrics %}
-                        {% for coin_id, metrics in risk_metrics.items() %}
-                            <tr>
-                                <td>{{ coin_id }}</td>
-                                <td>{{ metrics.sharpe_ratio }}</td>
-                                <td>{{ metrics.volatility }}</td>
-                                <td>{{ metrics.max_drawdown }}</td>
-                            </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr><td colspan="4">No risk metrics available.</td></tr>
-                    {% endif %}
-                </tbody>
-            </table>
-            <h3>Asset Correlation Matrix</h3>
-            <div class="chart-container">
-                <canvas id="correlationChart"></canvas>
-            </div>
-            <script>
-                fetch('/correlation_matrix')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.matrix && data.matrix.length > 0) {
-                            const ctx = document.getElementById('correlationChart').getContext('2d');
-                            new Chart(ctx, {
-                                type: 'matrix',
-                                data: {
-                                    datasets: [{
-                                        label: 'Correlation Matrix',
-                                        data: data.matrix.flatMap((row, i) => 
-                                            row.map((value, j) => ({
-                                                x: j,
-                                                y: i,
-                                                v: Math.round(value * 100) / 100
-                                            }))
-                                        ),
-                                        backgroundColor: (ctx) => {
-                                            const value = ctx.dataset.data[ctx.dataIndex].v;
-                                            const r = Math.abs(value) * 255;
-                                            return value >= 0 ? `rgb(${r}, 0, 0)` : `rgb(0, 0, ${r})`;
-                                        },
-                                        borderColor: 'black',
-                                        borderWidth: 1,
-                                        width: ({ chart }) => (chart.chartArea.width / data.labels.length) - 1,
-                                        height: ({ chart }) => (chart.chartArea.height / data.labels.length) - 1
-                                    }]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    plugins: {
-                                        legend: { display: false },
-                                        tooltip: {
-                                            callbacks: {
-                                                label: (ctx) => {
-                                                    const xLabel = data.labels[ctx.raw.x];
-                                                    const yLabel = data.labels[ctx.raw.y];
-                                                    const value = ctx.raw.v;
-                                                    return `${xLabel} vs ${yLabel}: ${value}`;
-                                                }
-                                            }
-                                        }
-                                    },
-                                    scales: {
-                                        x: {
-                                            ticks: {
-                                                callback: (value) => data.labels[value] || '',
-                                                maxRotation: 45,
-                                                minRotation: 45
-                                            },
-                                            grid: { display: false }
-                                        },
-                                        y: {
-                                            ticks: { callback: (value) => data.labels[value] || '' },
-                                            grid: { display: false }
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                    });
-            </script>
-            <h3>Archived Transactions (Sold Coins)</h3>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Wallet</th>
-                        <th>Coin</th>
-                        <th>Amount</th>
-                        <th>Purchase Price</th>
-                        <th>Sold Price</th>
-                        <th>Profit/Loss</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if sold_transactions %}
-                        {% for transaction in sold_transactions %}
-                            <tr>
-                                <td>Wallet {{ transaction.wallet_id }}</td>
-                                <td>{{ transaction.coin_id }}</td>
-                                <td>{{ transaction.amount }}</td>
-                                <td>${{ transaction.price | round(2) }}</td>
-                                <td>${{ transaction.sold_price | round(2) }}</td>
-                                <td>${{ transaction.profit | round(2) }}</td>
-                            </tr>
-                        {% endfor %}
-                    {% endif %}
-                </tbody>
-            </table>
-            {% if total_profit is defined and sold_transactions %}
-                <p><strong>Total Profit/Loss from Sold Coins:</strong> ${{ total_profit | round(2) }}</p>
-            {% endif %}
-        {% elif section == 'watchlist' %}
-            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-                <div class="navbar-nav">
-                    <a class="nav-link" href="{{ url_for('live_market') }}">Live Market</a>
-                    <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
-                    <a class="nav-link" href="{{ url_for('alerts') }}">Price Alerts</a>
-                    <a class="nav-link" href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('achievements') }}">Achievements</a>
-                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                </div>
-            </nav>
-            <h2>🔍 Your Watchlist</h2>
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-            <h3>Add a Coin to Watch</h3>
-            <form method="POST" action="{{ url_for('watchlist') }}">
-                <div class="input-group mb-3">
-                    {% if available_coins and available_coins|length > 0 %}
-                        <select name="coin_id" class="form-select" required>
-                            <option value="" disabled selected>Select a coin</option>
-                            {% for coin in available_coins %}
-                                <option value="{{ coin.id }}">{{ coin.name }} ({{ coin.symbol.upper() }})</option>
-                            {% endfor %}
-                        </select>
-                    {% else %}
-                        <input type="text" class="form-control" name="coin_id" placeholder="Enter Coin ID (e.g., bitcoin)" required>
-                        <div class="alert alert-warning mt-2" role="alert">
-                            No coins available in the dropdown. Please enter a Coin ID manually.
-                        </div>
-                    {% endif %}
-                    <input type="hidden" name="action" value="add">
-                    <button type="submit" class="btn btn-primary">Add to Watchlist ✅</button>
-                </div>
-            </form>
-            <h3>Watched Coins</h3>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Coin</th>
-                        <th>Symbol</th>
-                        <th>Current Price (USD)</th>
-                        <th>24h Change</th>
-                        <th>Market Cap</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if coins %}
-                        {% for coin in coins %}
-                            <tr>
-                                <td>{{ coin.name }}</td>
-                                <td>{{ coin.symbol }}</td>
-                                <td>${{ coin.current_price | round(2) if coin.current_price != 'N/A' else 'N/A' }}</td>
-                                <td>{{ coin.price_change_percentage_24h | round(2) if coin.price_change_percentage_24h != 'N/A' else 'N/A' }}%</td>
-                                <td>${{ coin.market_cap if coin.market_cap != 'N/A' else 'N/A' }}</td>
-                                <td>
-                                    <form method="POST" action="{{ url_for('watchlist') }}">
-                                        <input type="hidden" name="coin_id" value="{{ coin.id }}">
-                                        <input type="hidden" name="action" value="remove">
-                                        <button type="submit" class="btn btn-sm btn-danger">Remove</button>
-                                    </form>
-                                    <a href="#" class="btn btn-sm btn-info" onclick="showChart('{{ coin.id }}')">View Chart</a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr><td colspan="6">No coins in your watchlist.</td></tr>
-                    {% endif %}
-                </tbody>
-            </table>
-            <div class="chart-container">
-                <canvas id="priceChart"></canvas>
-            </div>
-            <script>
-                let chartInstance = null;
-                function showChart(coinId) {
-                    fetch(`/historical/${coinId}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.error) {
-                                alert(data.error);
-                                return;
-                            }
-                            const ctx = document.getElementById('priceChart').getContext('2d');
-                            if (chartInstance) {
-                                chartInstance.destroy();
-                            }
-                            chartInstance = new Chart.ctx, {
-                                type: 'line',
-                                data: {
-                                    labels: data.dates,
-                                    datasets: [
-                                        {
-                                            label: `${coinId.toUpperCase()} Price (USD)`,
-                                            data: data.prices,
-                                            borderColor: 'blue',
-                                            yAxisID: 'y-price',
-                                            fill: false
-                                        },
-                                        {
-                                            label: `${coinId.toUpperCase()} Volume (USD)`,
-                                            data: data.volumes,
-                                            borderColor: 'green',
-                                            yAxisID: 'y-volume',
-                                            fill: false
-                                        },
-                                        {
-                                            label: `${coinId.toUpperCase()} Market Cap (USD)`,
-                                            data: data.market_caps,
-                                            borderColor: 'red',
-                                            yAxisID: 'y-market-cap',
-                                            fill: false
-                                        }
-                                    ]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    scales: {
-                                        x: {
-                                            display: true,
-                                            title: { display: true, text: 'Date' }
-                                        },
-                                        'y-price': {
-                                            type: 'linear',
-                                            position: 'left',
-                                            display: true,
-                                            title: { display: true, text: 'Price (USD)' },
-                                            grid: { drawOnChartArea: false }
-                                        },
-                                        'y-volume': {
-                                            type: 'linear',
-                                            position: 'right',
-                                            display: true,
-                                            title: { display: true, text: 'Volume (USD)' },
-                                            grid: { drawOnChartArea: false }
-                                        },
-                                        'y-market-cap': {
-                                            type: 'linear',
-                                            position: 'right',
-                                            display: true,
-                                            title: { display: true, text: 'Market Cap (USD)' },
-                                            grid: { drawOnChartArea: false }
-                                        }
-                                    }
-                                }
-                            });
-                        });
-                }
-            </script>
+
         {% elif section == 'alerts' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
@@ -886,20 +853,42 @@
                 </div>
             </nav>
             <h2>Price Alerts</h2>
-            <h3>Set New Alert</h3>
-            <form method="POST" action="{{ url_for('alerts') }}">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            {% if error %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    {{ error }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endif %}
+            <h3>Add New Alert</h3>
+            <form method="POST" action="{{ url_for('alerts') }}" class="mb-4">
                 <div class="input-group mb-3">
-                    <input type="text" class="form-control" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
-                    <input type="number" class="form-control" name="target_price" placeholder="Target Price (USD)" step="0.01" required>
+                    {% if available_coins and available_coins|length > 0 %}
+                        <select name="coin_id" class="form-select" required>
+                            <option value="" disabled selected>Select a coin</option>
+                            {% for coin in available_coins %}
+                                <option value="{{ coin.id }}">{{ coin.name }} ({{ coin.symbol.upper() }})</option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        <input type="text" class="form-control" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
+                        <div class="alert alert-warning mt-2">No coins available in the dropdown. Please enter a Coin ID manually.</div>
+                    {% endif %}
                     <select name="alert_type" class="form-select" required>
+                        <option value="" disabled selected>Select Alert Type</option>
                         <option value="above">Above</option>
                         <option value="below">Below</option>
                     </select>
-                    <select name="order_type" class="form-select" required>
-                        <option value="limit">Limit</option>
-                        <option value="market">Market</option>
-                        <option value="stop">Stop</option>
-                    </select>
+                    <input type="number" class="form-control" name="target_price" placeholder="Target Price (USD)" step="0.01" min="0" required>
                     <button type="submit" class="btn btn-primary">Set Alert</button>
                 </div>
             </form>
@@ -910,24 +899,31 @@
                         <th>Coin</th>
                         <th>Target Price</th>
                         <th>Type</th>
-                        <th>Order Type</th>
                         <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% if alerts %}
                         {% for alert in alerts %}
                             <tr>
-                                <td>{{ alert.coin_id }}</td>
-                                <td>${{ alert.target_price }}</td>
-                                <td>{{ alert.alert_type }}</td>
-                                <td>{{ alert.order_type }}</td>
-                                <td>{{ alert.status }}</td>
+                                <td>{{ alert.coin_id | capitalize }}</td>
+                                <td>${{ alert.target_price | round(2) }}</td>
+                                <td>{{ alert.alert_type | capitalize }}</td>
+                                <td>{{ 'Triggered' if alert.triggered_at else 'Active' }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('dismiss_alert', alert_id=alert.id) }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                                    </form>
+                                </td>
                             </tr>
                         {% endfor %}
+                    {% else %}
+                        <tr><td colspan="5">No alerts set.</td></tr>
                     {% endif %}
                 </tbody>
             </table>
+
         {% elif section == 'risk_quiz' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
@@ -951,7 +947,7 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            <form method="POST" action="{{ url_for('risk_quiz') }}">
+            <form method="POST" action="{{ url_for('risk_quiz') }}" class="mb-4">
                 <div class="mb-3">
                     <label class="form-label">1. How would you react to a 20% drop in your portfolio? (1 = Sell immediately, 5 = Hold long-term)</label>
                     <input type="number" class="form-control" name="q1" min="1" max="5" required>
@@ -974,6 +970,7 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Submit</button>
             </form>
+
         {% elif section == 'achievements' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
@@ -997,13 +994,24 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            <ul class="list-group">
+            <ul class="list-group mb-4">
                 {% if achievements %}
                     {% for achievement in achievements %}
-                        <li class="list-group-item">{{ achievement }}</li>
+                        {% if achievement %}
+                            <li class="list-group-item">{{ achievement }}</li>
+                        {% endif %}
                     {% endfor %}
+                {% else %}
+                    <li class="list-group-item">No achievements yet.</li>
                 {% endif %}
             </ul>
+            <h3>Add Achievement (For Testing)</h3>
+            <form method="POST" action="{{ url_for('update_achievements') }}" class="mb-4">
+                <div class="input-group">
+                    <input type="text" class="form-control" name="achievement" placeholder="Enter achievement" required>
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </form>
         {% endif %}
     </div>
 </body>

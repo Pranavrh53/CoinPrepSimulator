@@ -7,13 +7,14 @@ from datetime import datetime, timedelta
 import os
 import random
 import string
-import hashlib
 import time
 import numpy as np
 import pandas as pd
 from queue import Queue
 from threading import Lock
 from apscheduler.schedulers.background import BackgroundScheduler
+import smtplib
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -27,12 +28,20 @@ db_config = {
     'database': 'crypto_tracker'
 }
 
+# Email Configuration
+EMAIL_CONFIG = {
+    'smtp_server': 'smtp.gmail.com',
+    'smtp_port': 587,
+    'sender_email': 'frozenflames677@gmail.com',  # Replace with your email
+    'sender_password': 'Pranavrh123$'   # Replace with your app-specific password
+}
+
 # CoinGecko API
 COINGECKO_API = "https://api.coingecko.com/api/v3"
 COINS_PER_PAGE = 20
 CACHE_DURATION = 600  # Cache API responses for 10 minutes
 api_cache = {}  # In-memory cache: {url: (response_data, timestamp)}
-CHECK_INTERVAL = 300  # Check prices every 5 minutes
+CHECK_INTERVAL = 30  # Check prices every 5 minutes
 
 # Request throttling
 REQUEST_LIMIT = 5  # Requests per minute
@@ -49,6 +58,22 @@ def get_db_connection():
 
 def generate_verification_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+def send_email(to_email, subject, body):
+    try:
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = EMAIL_CONFIG['sender_email']
+        msg['To'] = to_email
+
+        with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
+            server.starttls()
+            server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        return False
 
 def throttle_request():
     with request_lock:
@@ -105,7 +130,7 @@ def check_price_alerts():
         return
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM price_alerts WHERE notified = 0")
+        cursor.execute("SELECT pa.*, u.email FROM price_alerts pa JOIN users u ON pa.user_id = u.id WHERE pa.triggered_at IS NULL")
         alerts = cursor.fetchall()
         if not alerts:
             return
@@ -125,14 +150,19 @@ def check_price_alerts():
             alert_type = alert['alert_type']
             triggered = (alert_type == 'above' and current_price >= target_price) or (alert_type == 'below' and current_price <= target_price)
             if triggered:
-                message = f"Alert: {coin_id.capitalize()} has {alert_type} ${target_price:.2f}. Current price: ${current_price:.2f}."
-                cursor.execute(
-                    "INSERT INTO notifications (user_id, coin_id, message) VALUES (%s, %s, %s)",
-                    (alert['user_id'], coin_id, message)
-                )
-                cursor.execute("UPDATE price_alerts SET notified = 1 WHERE id = %s", (alert['id'],))
+                message = f"📉 {coin_id.capitalize()} has {alert_type} ${target_price:.2f}. Current price: ${current_price:.2f}."
+                cursor.execute("UPDATE price_alerts SET triggered_at = %s WHERE id = %s", (datetime.now(), alert['id']))
                 conn.commit()
-                print(f"Notification triggered for user {alert['user_id']}: {message}")
+                email_sent = send_email(
+                    alert['email'],
+                    f"Crypto Price Alert: {coin_id.capitalize()}",
+                    f"{message}\n\nVisit your dashboard to take action: http://localhost:5000/dashboard"
+                )
+                if email_sent:
+                    print(f"Email sent to {alert['email']} for alert on {coin_id}")
+                else:
+                    print(f"Failed to send email to {alert['email']} for alert on {coin_id}")
+                print(f"Alert triggered for user {alert['user_id']}: {message}")
     except mysql.connector.Error as err:
         print(f"Database error in price alert check: {err}")
     finally:
@@ -260,7 +290,15 @@ def register():
                           (username, email, password, verification_code))
             cursor.execute("UPDATE users SET achievements = '' WHERE email = %s", (email,))
             conn.commit()
-            flash(f"Verification code sent to {email}. Please verify.", "info")
+            email_sent = send_email(
+                email,
+                "CryptoTracker Verification Code",
+                f"Your verification code is: {verification_code}\n\nPlease enter this code to verify your account."
+            )
+            if email_sent:
+                flash(f"Verification code sent to {email}. Please verify.", "info")
+            else:
+                flash(f"Failed to send verification code to {email}. Please try again.", "error")
             return redirect(url_for('verify', email=email))
         except mysql.connector.Error as err:
             flash(f"Registration error: {err}", "error")
@@ -301,6 +339,7 @@ def verify(email):
         return render_template('combined.html', section='verify', email=email, user=None)
     return render_template('combined.html', section='verify', email=email, user=None)
 
+
 @app.route('/risk_quiz', methods=['GET', 'POST'])
 def risk_quiz():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
@@ -328,7 +367,7 @@ def risk_quiz():
         return render_template('combined.html', section='risk_quiz')
     return render_template('combined.html', section='risk_quiz')
 
-@app.route('/dashboard')
+@app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
@@ -340,40 +379,21 @@ def dashboard():
         flash("Failed to fetch market data. Please try again later.", "error")
     conn = get_db_connection()
     user = None
-    notifications = []
+    triggered_alerts = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT crypto_bucks, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
-            cursor.execute("SELECT id, coin_id, message, created_at FROM notifications WHERE user_id = %s AND is_read = 0 ORDER BY created_at DESC", (session['user_id'],))
-            notifications = cursor.fetchall()
+            cursor.execute("SELECT * FROM price_alerts WHERE user_id = %s AND triggered_at IS NOT NULL", (session['user_id'],))
+            triggered_alerts = cursor.fetchall()
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='dashboard', coins=coins, user=user, notifications=notifications)
-
-@app.route('/mark_notification_read/<int:notification_id>', methods=['POST'])
-def mark_notification_read(notification_id):
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-        return redirect(url_for('login'))
-    conn = get_db_connection()
-    if conn:
-        try:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = %s AND user_id = %s", (notification_id, session['user_id']))
-            conn.commit()
-            flash("Notification marked as read.", "success")
-        except mysql.connector.Error as err:
-            flash(f"Database error: {err}", "error")
-        finally:
-            if conn.is_connected():
-                cursor.close()
-                conn.close()
-    return redirect(url_for('dashboard'))
+    return render_template('combined.html', section='dashboard', coins=coins, user=user, triggered_alerts=triggered_alerts)
 
 @app.route('/live_market')
 def live_market():
@@ -736,47 +756,85 @@ def watchlist():
 def alerts():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+    conn = get_db_connection()
+    if conn is None:
+        flash("Database connection failed", "error")
+        return redirect(url_for('dashboard'))
+    available_coins = []
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false")
+    if response:
+        available_coins = json.loads(response.text)
+    else:
+        flash("Failed to fetch coin list for dropdown. Using cached data if available.", "warning")
     if request.method == 'POST':
-        coin_id = request.form.get('coin_id', '').lower()
+        coin_id = request.form.get('coin_id', '').lower().strip()
         target_price = request.form.get('target_price')
         alert_type = request.form.get('alert_type')
-        order_type = request.form.get('order_type', 'limit')
         if not all([coin_id, target_price, alert_type]):
             flash("All fields are required", "error")
             return redirect(url_for('alerts'))
+        coin_exists = any(coin['id'] == coin_id for coin in available_coins)
+        if not coin_exists:
+            flash(f"Coin '{coin_id}' not found. Please select a valid coin.", "error")
+            return redirect(url_for('alerts'))
         try:
             target_price = float(target_price)
+            if target_price <= 0:
+                raise ValueError("Target price must be positive")
         except ValueError:
-            flash("Invalid target price", "error")
+            flash("Invalid target_price", "error")
             return redirect(url_for('alerts'))
-        conn = get_db_connection()
-        if conn:
-            try:
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type, order_type, notified) VALUES (%s, %s, %s, %s, %s, 0)",
-                              (session['user_id'], coin_id, target_price, alert_type, order_type))
-                conn.commit()
-                flash("Alert set successfully", "success")
-            except mysql.connector.Error as err:
-                flash(f"Database error: {err}", "error")
-            finally:
-                if conn.is_connected():
-                    cursor.close()
-                    conn.close()
-    conn = get_db_connection()
-    alerts = []
-    if conn:
         try:
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM price_alerts WHERE user_id = %s", (session['user_id'],))
-            alerts = cursor.fetchall()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type) VALUES (%s, %s, %s, %s)",
+                (session['user_id'], coin_id, target_price, alert_type)
+            )
+            conn.commit()
+            flash("Alert set successfully", "success")
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='alerts', alerts=alerts)
+        return redirect(url_for('alerts'))
+    alerts = []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM price_alerts WHERE user_id = %s", (session['user_id'],))
+        alerts = cursor.fetchall()
+    except mysql.connector.Error as err:
+        flash(f"Database error: {err}", "error")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+    return render_template('combined.html', section='alerts', alerts=alerts, available_coins=available_coins)
+
+@app.route('/dismiss_alert/<int:alert_id>', methods=['POST'])
+def dismiss_alert(alert_id):
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    conn = get_db_connection()
+    if conn is None:
+        flash("Database connection failed", "error")
+        return redirect(url_for('alerts'))
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM price_alerts WHERE id = %s AND user_id = %s", (alert_id, session['user_id']))
+        if cursor.rowcount > 0:
+            conn.commit()
+            flash("Alert dismissed successfully", "success")
+        else:
+            flash("Alert not found or you do not have permission to dismiss it", "error")
+    except mysql.connector.Error as err:
+        flash(f"Database error: {err}", "error")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+    return redirect(url_for('alerts'))
 
 @app.route('/logout')
 def logout():

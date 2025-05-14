@@ -45,10 +45,10 @@ CREATE TABLE IF NOT EXISTS watchlist (
 CREATE TABLE IF NOT EXISTS price_alerts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
-    coin_id VARCHAR(50),
-    target_price DECIMAL(15, 2),
-    alert_type ENUM('above', 'below'),
-    order_type ENUM('limit', 'market', 'stop'),
+    coin_id VARCHAR(50) NOT NULL,
+    target_price DECIMAL(15, 2) NOT NULL,
+    alert_type ENUM('above', 'below') NOT NULL,
+    order_type ENUM('limit', 'market', 'stop') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notified TINYINT(1) DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     message TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_read TINYINT(1) DEFAULT 0,
+    email_sent TINYINT(1) DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -70,4 +71,4 @@ INSERT INTO users (username, email, password) VALUES
 
 -- Insert wallets for the default user (id = 1)
 INSERT INTO wallets (user_id, name) VALUES (1, 'Default Wallet'), (1, 'Altcoin Wallet')
-ON DUPLICATE KEY UPDATE name=name;
+ON DUPLICATE KEY UPDATE name=name;  
