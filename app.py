@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 import os
 import random
 import string
-import hashlib
 import time
 import numpy as np
 import pandas as pd
@@ -340,24 +339,33 @@ def dashboard():
         flash("Failed to fetch market data. Please try again later.", "error")
     conn = get_db_connection()
     user = None
-    notifications = []
+    triggered_alerts = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT crypto_bucks, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
-            cursor.execute("SELECT id, coin_id, message, created_at FROM notifications WHERE user_id = %s AND is_read = 0 ORDER BY created_at DESC", (session['user_id'],))
+            cursor.execute("SELECT id, coin_id, target_price, alert_type, created_at FROM notifications WHERE user_id = %s AND is_read = 0 ORDER BY created_at DESC", (session['user_id'],))
             notifications = cursor.fetchall()
+            if notifications:
+                coin_ids = ','.join(set(n['coin_id'] for n in notifications))
+                response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}")
+                if response:
+                    prices = {coin['id']: coin['current_price'] for coin in json.loads(response.text)}
+                    for notification in notifications:
+                        notification['current_price'] = prices.get(notification['coin_id'], 0)
+                        notification['triggered_at'] = notification['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                        triggered_alerts.append(notification)
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='dashboard', coins=coins, user=user, notifications=notifications)
+    return render_template('combined.html', section='dashboard', coins=coins, user=user, triggered_alerts=triggered_alerts)
 
-@app.route('/mark_notification_read/<int:notification_id>', methods=['POST'])
-def mark_notification_read(notification_id):
+@app.route('/dismiss_alert/<int:notification_id>', methods=['POST'])
+def dismiss_alert(notification_id):
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
     conn = get_db_connection()
@@ -366,13 +374,29 @@ def mark_notification_read(notification_id):
             cursor = conn.cursor()
             cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = %s AND user_id = %s", (notification_id, session['user_id']))
             conn.commit()
-            flash("Notification marked as read.", "success")
+            flash("Alert dismissed.", "success")
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
+    return redirect(url_for('dashboard'))
+
+@app.route('/trade_from_alert', methods=['POST'])
+def trade_from_alert():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    coin_id = request.form.get('coin_id')
+    current_price = float(request.form.get('current_price', 0))
+    return redirect(url_for('live_market', coin_id=coin_id, current_price=current_price))
+
+@app.route('/refresh_alerts', methods=['POST'])
+def refresh_alerts():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    check_price_alerts()
+    flash("Alerts refreshed.", "success")
     return redirect(url_for('dashboard'))
 
 @app.route('/live_market')
@@ -736,25 +760,39 @@ def watchlist():
 def alerts():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+    # Fetch available coins for the dropdown
+    available_coins = []
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false")
+    if response:
+        available_coins = json.loads(response.text)
+    else:
+        flash("Failed to fetch coin list for dropdown. Using cached data if available.", "warning")
     if request.method == 'POST':
         coin_id = request.form.get('coin_id', '').lower()
         target_price = request.form.get('target_price')
         alert_type = request.form.get('alert_type')
-        order_type = request.form.get('order_type', 'limit')
         if not all([coin_id, target_price, alert_type]):
             flash("All fields are required", "error")
+            return redirect(url_for('alerts'))
+        # Validate coin_id
+        coin_exists = any(coin['id'] == coin_id for coin in available_coins)
+        if not coin_exists:
+            flash(f"Coin '{coin_id}' not found. Please select a valid coin.", "error")
             return redirect(url_for('alerts'))
         try:
             target_price = float(target_price)
         except ValueError:
             flash("Invalid target price", "error")
             return redirect(url_for('alerts'))
+        if target_price <= 0:
+            flash("Target price must be positive", "error")
+            return redirect(url_for('alerts'))
         conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor()
-                cursor.execute("INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type, order_type, notified) VALUES (%s, %s, %s, %s, %s, 0)",
-                              (session['user_id'], coin_id, target_price, alert_type, order_type))
+                cursor.execute("INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type, notified) VALUES (%s, %s, %s, %s, 0)",
+                              (session['user_id'], coin_id, target_price, alert_type))
                 conn.commit()
                 flash("Alert set successfully", "success")
             except mysql.connector.Error as err:
@@ -770,13 +808,37 @@ def alerts():
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT * FROM price_alerts WHERE user_id = %s", (session['user_id'],))
             alerts = cursor.fetchall()
+            for alert in alerts:
+                alert['status'] = 'Triggered' if alert['notified'] else 'Pending'
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='alerts', alerts=alerts)
+    return render_template('combined.html', section='alerts', alerts=alerts, available_coins=available_coins)
+
+@app.route('/remove_alert/<int:alert_id>', methods=['POST'])
+def remove_alert(alert_id):
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM price_alerts WHERE id = %s AND user_id = %s", (alert_id, session['user_id']))
+            if cursor.rowcount > 0:
+                conn.commit()
+                flash("Alert removed successfully", "success")
+            else:
+                flash("Alert not found", "error")
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    return redirect(url_for('alerts'))
 
 @app.route('/logout')
 def logout():
