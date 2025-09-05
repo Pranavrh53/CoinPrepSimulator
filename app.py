@@ -13,10 +13,23 @@ import pandas as pd
 from queue import Queue
 from threading import Lock
 from apscheduler.schedulers.background import BackgroundScheduler
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 bcrypt = Bcrypt(app)
+
+# Email Configuration
+EMAIL_CONFIG = {
+    'MAIL_SERVER': 'smtp.gmail.com',  # Using Gmail SMTP server
+    'MAIL_PORT': 587,
+    'MAIL_USE_TLS': True,
+    'MAIL_USERNAME': 'frozenflames677@gmail.com',  # Replace with your email
+    'MAIL_PASSWORD': 'auhe hrhm cfix hjii',     # Use App Password if 2FA is enabled
+    'MAIL_DEFAULT_SENDER': 'frozenflames677@gmail.com'  # Replace with your email
+}
 
 # MySQL Configuration
 db_config = {
@@ -96,6 +109,27 @@ def fetch_with_retry(url, retries=3, base_delay=10):
             return None
     return None
 
+def send_email_notification(recipient, subject, body):
+    """Send an email notification to the specified recipient."""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_CONFIG['MAIL_DEFAULT_SENDER']
+        msg['To'] = recipient
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        with smtplib.SMTP(EMAIL_CONFIG['MAIL_SERVER'], EMAIL_CONFIG['MAIL_PORT']) as server:
+            server.starttls()
+            server.login(EMAIL_CONFIG['MAIL_USERNAME'], EMAIL_CONFIG['MAIL_PASSWORD'])
+            server.send_message(msg)
+            
+        print(f"Email notification sent to {recipient}")
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+
 def check_price_alerts():
     print("Checking price alerts...")
     conn = get_db_connection()
@@ -104,7 +138,7 @@ def check_price_alerts():
         return
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM price_alerts WHERE notified = 0")
+        cursor.execute("SELECT pa.*, u.email as user_email FROM price_alerts pa JOIN users u ON pa.user_id = u.id WHERE pa.notified = 0")
         alerts = cursor.fetchall()
         if not alerts:
             return
@@ -132,6 +166,24 @@ def check_price_alerts():
                 cursor.execute("UPDATE price_alerts SET notified = 1 WHERE id = %s", (alert['id'],))
                 conn.commit()
                 print(f"Notification triggered for user {alert['user_id']}: {message}")
+                # Send email notification to the user's email
+                user_email = alert['user_email']
+                send_email_notification(
+                    recipient=user_email,
+                    subject=f"Crypto Price Alert: {coin_id.upper()} {alert_type} {target_price}",
+                    body=f"""
+                    Hi,
+                    
+                    Your price alert has been triggered:
+                    
+                    {message}
+                    
+                    You can view your portfolio and set up new alerts by logging in to your account.
+                    
+                    Best regards,
+                    Crypto Tracker Team(Pranav RH)
+                    """
+                )
     except mysql.connector.Error as err:
         print(f"Database error in price alert check: {err}")
     finally:
@@ -163,7 +215,7 @@ def calculate_risk_metrics(coin_ids, amounts, days=30):
         returns = np.diff(prices) / prices[:-1]
         mean_return = np.mean(returns)
         std_return = np.std(returns) if len(returns) > 1 else 0
-        sharpe_ratio = (mean_return - risk_free_rate) / std_return if std_return > 0 else 'N/A'
+        sharpe_ratio = np.sqrt(365) * (mean_return - risk_free_rate) / std_return if std_return > 0 else 'N/A'
         volatility = std_return * np.sqrt(365) if std_return > 0 else 'N/A'
         cumulative = np.cumprod(1 + returns)
         peak = np.maximum.accumulate(cumulative)
@@ -304,28 +356,128 @@ def verify(email):
 def risk_quiz():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+    
+    questions = [
+        {
+            'id': 'q1',
+            'text': 'How would you react to a 20% drop in your portfolio value in a month?',
+            'options': [
+                {'value': 1, 'text': 'Sell all investments immediately'},
+                {'value': 2, 'text': 'Sell some to reduce risk'},
+                {'value': 3, 'text': 'Hold and wait for recovery'},
+                {'value': 4, 'text': 'Buy more to lower cost'},
+                {'value': 5, 'text': 'Significantly increase position'}
+            ]
+        },
+        {
+            'id': 'q2',
+            'text': 'What is your investment time horizon?',
+            'options': [
+                {'value': 1, 'text': 'Less than 1 year'},
+                {'value': 3, 'text': '1-3 years'},
+                {'value': 5, 'text': '3-5 years'},
+                {'value': 8, 'text': '5-10 years'},
+                {'value': 10, 'text': '10+ years'}
+            ]
+        },
+        {
+            'id': 'q3',
+            'text': 'What percentage of your income do you invest?',
+            'options': [
+                {'value': 1, 'text': 'Less than 5%'},
+                {'value': 3, 'text': '5-10%'},
+                {'value': 5, 'text': '10-20%'},
+                {'value': 7, 'text': '20-30%'},
+                {'value': 10, 'text': 'More than 30%'}
+            ]
+        },
+        {
+            'id': 'q4',
+            'text': 'Your investment knowledge level?',
+            'options': [
+                {'value': 1, 'text': 'Beginner'},
+                {'value': 3, 'text': 'Some knowledge'},
+                {'value': 5, 'text': 'Experienced'},
+                {'value': 7, 'text': 'Advanced'},
+                {'value': 10, 'text': 'Expert'}
+            ]
+        },
+        {
+            'id': 'q5',
+            'text': 'Your main investment goal?',
+            'options': [
+                {'value': 1, 'text': 'Preserve capital'},
+                {'value': 3, 'text': 'Generate income'},
+                {'value': 5, 'text': 'Balanced growth'},
+                {'value': 8, 'text': 'Long-term growth'},
+                {'value': 10, 'text': 'Maximum returns'}
+            ]
+        }
+    ]
+    
     if request.method == 'POST':
         try:
-            score = sum(int(request.form.get(f'q{i}', 0)) for i in range(1, 6))
-            risk_level = 'Low' if score <= 10 else 'Medium' if score <= 20 else 'High'
+            # Calculate total score (max 45 points)
+            score = sum(int(request.form.get(question['id'], 0)) for question in questions)
+            
+            # Determine risk level
+            if score <= 10:
+                risk_level = 'Conservative (1/5)'
+                risk_percent = 20
+            elif score <= 20:
+                risk_level = 'Moderate (2/5)'
+                risk_percent = 40
+            elif score <= 30:
+                risk_level = 'Balanced (3/5)'
+                risk_percent = 60
+            elif score <= 38:
+                risk_level = 'Growth (4/5)'
+                risk_percent = 80
+            else:
+                risk_level = 'Aggressive (5/5)'
+                risk_percent = 100
+            
+            # Update database
             conn = get_db_connection()
             if conn:
                 try:
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE users SET risk_tolerance = %s WHERE id = %s", (risk_level, session['user_id']))
+                    cursor.execute("""
+                        UPDATE users 
+                        SET risk_tolerance = %s, risk_score = %s 
+                        WHERE id = %s
+                    """, (risk_level, score, session['user_id']))
                     conn.commit()
-                    flash(f"Your risk tolerance is {risk_level}.", "info")
+                    
+                    # Get user's current risk profile
+                    cursor.execute("SELECT risk_score, risk_tolerance FROM users WHERE id = %s", (session['user_id'],))
+                    user_data = cursor.fetchone()
+                    
+                    return render_template('combined.html', 
+                                       section='risk_quiz_result',
+                                       risk_level=risk_level,
+                                       risk_percent=risk_percent,
+                                       score=score,
+                                       max_score=45,
+                                       user_data=user_data)
+                    
                 except mysql.connector.Error as err:
                     flash(f"Database error: {err}", "error")
+                    return redirect(url_for('risk_quiz'))
                 finally:
                     if conn.is_connected():
                         cursor.close()
                         conn.close()
             return redirect(url_for('dashboard'))
-        except ValueError:
-            flash("Invalid input for quiz questions", "error")
-        return render_template('combined.html', section='risk_quiz')
-    return render_template('combined.html', section='risk_quiz')
+            
+        except ValueError as e:
+            flash("Invalid input. Please answer all questions.", "error")
+            return redirect(url_for('risk_quiz'))
+    
+    # GET request - show the quiz
+    return render_template('combined.html', 
+                         section='risk_quiz', 
+                         questions=questions)
 
 @app.route('/dashboard')
 def dashboard():
@@ -345,7 +497,13 @@ def dashboard():
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT crypto_bucks, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
-            cursor.execute("SELECT id, coin_id, target_price, alert_type, created_at FROM notifications WHERE user_id = %s AND is_read = 0 ORDER BY created_at DESC", (session['user_id'],))
+            cursor.execute("""
+                SELECT n.id, n.coin_id, n.message, n.created_at, pa.alert_type, pa.target_price 
+                FROM notifications n
+                JOIN price_alerts pa ON n.coin_id = pa.coin_id AND n.user_id = pa.user_id
+                WHERE n.user_id = %s AND n.is_read = 0 
+                ORDER BY n.created_at DESC
+            """, (session['user_id'],))
             notifications = cursor.fetchall()
             if notifications:
                 coin_ids = ','.join(set(n['coin_id'] for n in notifications))
@@ -355,6 +513,13 @@ def dashboard():
                     for notification in notifications:
                         notification['current_price'] = prices.get(notification['coin_id'], 0)
                         notification['triggered_at'] = notification['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                        if 'alert_type' not in notification:
+                            notification['alert_type'] = 'above' if 'above' in notification['message'].lower() else 'below'
+                        if 'target_price' not in notification:
+                            import re
+                            match = re.search(r'\$([\d.]+)', notification['message'])
+                            if match:
+                                notification['target_price'] = float(match.group(1))
                         triggered_alerts.append(notification)
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
@@ -416,7 +581,7 @@ def live_market():
     user_wallets = []
     if conn:
         try:
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
             user_wallets = cursor.fetchall()
             if not user_wallets:
@@ -462,62 +627,52 @@ def trade():
         return redirect(url_for(source))
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
-        crypto_bucks = float(cursor.fetchone()['crypto_bucks'])
-        total_cost = amount * current_price
         if action == 'buy':
+            cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
+            crypto_bucks = float(cursor.fetchone()['crypto_bucks'])
+            total_cost = amount * current_price
             if total_cost > crypto_bucks:
                 flash("Insufficient CryptoBucks", "error")
                 return redirect(url_for(source))
             cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
             cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
                           (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
-        else:
+        elif action == 'sell':
+            buy_transaction_id = request.form.get('buy_transaction_id')
+            if not buy_transaction_id:
+                flash("Missing buy transaction ID", "error")
+                return redirect(url_for(source))
+            try:
+                buy_transaction_id = int(buy_transaction_id)
+            except ValueError:
+                flash("Invalid buy transaction ID", "error")
+                return redirect(url_for(source))
             cursor.execute(
-                "SELECT id, amount, price FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy' ORDER BY id ASC",
-                (session['user_id'], wallet_id, coin_id)
+                "SELECT amount, price FROM transactions WHERE id = %s AND user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy'",
+                (buy_transaction_id, session['user_id'], wallet_id, coin_id)
             )
-            buy_transactions = cursor.fetchall()
+            buy = cursor.fetchone()
+            if not buy:
+                flash("Invalid buy transaction", "error")
+                return redirect(url_for(source))
             cursor.execute(
-                "SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy'",
-                (session['user_id'], wallet_id, coin_id)
+                "SELECT SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND type = 'sell' AND buy_transaction_id = %s",
+                (session['user_id'], buy_transaction_id)
             )
-            total_bought = float(cursor.fetchone()['total'] or 0)
-            cursor.execute(
-                "SELECT SUM(amount) as total FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'sell'",
-                (session['user_id'], wallet_id, coin_id)
-            )
-            total_sold = float(cursor.fetchone()['total'] or 0)
-            available = total_bought - total_sold
+            already_sold = float(cursor.fetchone()['total_sold'] or 0)
+            available = float(buy['amount']) - already_sold
             if amount > available:
                 flash("Insufficient coin amount to sell", "error")
                 return redirect(url_for(source))
-            remaining_to_sell = amount
-            purchase_price = 0.0
-            weighted_price_sum = 0.0
-            for buy in buy_transactions:
-                if remaining_to_sell <= 0:
-                    break
-                cursor.execute(
-                    "SELECT SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'sell' AND buy_transaction_id = %s",
-                    (session['user_id'], wallet_id, coin_id, buy['id'])
-                )
-                already_sold = float(cursor.fetchone()['total_sold'] or 0)
-                available_from_this_buy = float(buy['amount']) - already_sold
-                if available_from_this_buy <= 0:
-                    continue
-                amount_to_use = min(remaining_to_sell, available_from_this_buy)
-                weighted_price_sum += amount_to_use * float(buy['price'])
-                remaining_to_sell -= amount_to_use
-            if amount > 0:
-                purchase_price = weighted_price_sum / amount
-            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (total_cost, session['user_id']))
+            purchase_price = float(buy['price'])
+            revenue = amount * current_price
+            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (revenue, session['user_id']))
             cursor.execute(
                 "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy['id'])
+                (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy_transaction_id)
             )
         conn.commit()
-        flash(f"Successfully {action} {amount} {coin_id}", "success")
+        flash(f"Successfully {action}ed {amount} {coin_id}", "success")
     except mysql.connector.Error as err:
         flash(f"Database error: {err}", "error")
     finally:
@@ -541,27 +696,20 @@ def portfolio():
         try:
             amount = float(amount)
             purchase_price = float(purchase_price)
+            wallet_id = int(wallet_id)
         except ValueError:
-            flash("Invalid amount or purchase price", "error")
+            flash("Invalid amount, purchase price, or wallet", "error")
             return redirect(url_for('portfolio'))
         conn = get_db_connection()
         if conn:
             try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id FROM wallets WHERE user_id = %s", (session['user_id'],))
-                existing_wallets = cursor.fetchall()
-                if not existing_wallets:
-                    cursor.execute("INSERT INTO wallets (user_id, name) VALUES (%s, %s)", 
-                                 (session['user_id'], 'Default Wallet'))
-                    conn.commit()
-                    cursor.execute("SELECT LAST_INSERT_ID()")
-                    wallet_id = cursor.fetchone()[0]
-                elif wallet_id and not any(w[0] == int(wallet_id) for w in existing_wallets):
-                    wallet_id = existing_wallets[0][0]
-                else:
-                    wallet_id = int(wallet_id) if wallet_id else existing_wallets[0][0]
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT id FROM wallets WHERE user_id = %s AND id = %s", (session['user_id'], wallet_id))
+                if not cursor.fetchone():
+                    flash("Invalid wallet", "error")
+                    return redirect(url_for('portfolio'))
                 cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
-                crypto_bucks = float(cursor.fetchone()[0])
+                crypto_bucks = float(cursor.fetchone()['crypto_bucks'])
                 total_cost = amount * purchase_price
                 if total_cost <= crypto_bucks and amount > 0 and purchase_price > 0:
                     cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
@@ -582,42 +730,30 @@ def portfolio():
     total_profit = 0.0
     current_prices = {}
     risk_metrics = {}
+    transactions = []
+    user_wallets = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
+            user_wallets = cursor.fetchall()
             cursor.execute("SELECT * FROM transactions WHERE user_id = %s AND type = 'sell'", (session['user_id'],))
             sold_transactions = cursor.fetchall()
             for transaction in sold_transactions:
-                transaction['price'] = float(transaction['price']) if transaction['price'] is not None else 0.0
-                transaction['sold_price'] = float(transaction['sold_price']) if transaction['sold_price'] is not None else 0.0
-                transaction['amount'] = float(transaction['amount']) if transaction['amount'] is not None else 0.0
+                transaction['price'] = float(transaction['price'] or 0)
+                transaction['sold_price'] = float(transaction['sold_price'] or 0)
+                transaction['amount'] = float(transaction['amount'] or 0)
                 profit = (transaction['sold_price'] - transaction['price']) * transaction['amount']
-                transaction['profit'] = profit
+                transaction['profit'] = round(profit, 2)
                 total_profit += profit
-        except mysql.connector.Error as err:
-            flash(f"Database error: {err}", "error")
-        finally:
-            if conn.is_connected():
-                cursor.close()
-                conn.close()
-    conn = get_db_connection()
-    transactions = []
-    if conn:
-        try:
-            cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT id, wallet_id, coin_id, amount, price FROM transactions WHERE user_id = %s AND type = 'buy' ORDER BY id ASC",
                           (session['user_id'],))
             buy_transactions = cursor.fetchall()
-            cursor.execute("SELECT wallet_id, coin_id, buy_transaction_id, amount FROM transactions WHERE user_id = %s AND type = 'sell'",
-                          (session['user_id'],))
-            sell_transactions = cursor.fetchall()
             sold_amounts = {}
-            for sell in sell_transactions:
-                buy_id = sell['buy_transaction_id']
-                if buy_id:
-                    if buy_id not in sold_amounts:
-                        sold_amounts[buy_id] = 0.0
-                    sold_amounts[buy_id] += float(sell['amount'] or 0)
+            cursor.execute("SELECT buy_transaction_id, SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND type = 'sell' GROUP BY buy_transaction_id",
+                          (session['user_id'],))
+            for row in cursor.fetchall():
+                sold_amounts[row['buy_transaction_id']] = float(row['total_sold'])
             for buy in buy_transactions:
                 buy_id = buy['id']
                 total_bought = float(buy['amount'] or 0)
@@ -655,20 +791,7 @@ def portfolio():
             current_prices = {coin['id']: float(coin['current_price']) for coin in cached_data if 'current_price' in coin}
         else:
             current_prices = {coin_id: 0.0 for coin_id in coin_ids}
-    conn = get_db_connection()
-    user_wallets = []
-    if conn:
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
-            user_wallets = cursor.fetchall()
-        except mysql.connector.Error as err:
-            flash(f"Database error: {err}", "error")
-        finally:
-            if conn.is_connected():
-                cursor.close()
-                conn.close()
-    return render_template('combined.html', section='portfolio', transactions=transactions, sold_transactions=sold_transactions, total_profit=total_profit, current_prices=current_prices, wallets=user_wallets, risk_metrics=risk_metrics, correlation_data=correlation_data)
+    return render_template('combined.html', section='portfolio', transactions=transactions, sold_transactions=sold_transactions, total_profit=round(total_profit, 2), current_prices=current_prices, wallets=user_wallets, risk_metrics=risk_metrics, correlation_data=correlation_data)
 
 @app.route('/watchlist', methods=['GET', 'POST'])
 def watchlist():
@@ -771,7 +894,8 @@ def alerts():
         coin_id = request.form.get('coin_id', '').lower()
         target_price = request.form.get('target_price')
         alert_type = request.form.get('alert_type')
-        if not all([coin_id, target_price, alert_type]):
+        order_type = request.form.get('order_type')
+        if not all([coin_id, target_price, alert_type, order_type]):
             flash("All fields are required", "error")
             return redirect(url_for('alerts'))
         # Validate coin_id
@@ -790,11 +914,22 @@ def alerts():
         conn = get_db_connection()
         if conn:
             try:
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO price_alerts (user_id, coin_id, target_price, alert_type, notified) VALUES (%s, %s, %s, %s, 0)",
-                              (session['user_id'], coin_id, target_price, alert_type))
+                cursor = conn.cursor(dictionary=True)
+                # Get user's email
+                cursor.execute("SELECT email FROM users WHERE id = %s", (session['user_id'],))
+                user = cursor.fetchone()
+                if not user or 'email' not in user:
+                    flash("Error: Could not retrieve your email address. Please update your profile.", "error")
+                    return redirect(url_for('alerts'))
+                
+                # Insert the alert with user's email
+                cursor.execute("""
+                    INSERT INTO price_alerts 
+                    (user_id, user_email, coin_id, target_price, alert_type, order_type, notified) 
+                    VALUES (%s, %s, %s, %s, %s, %s, 0)
+                """, (session['user_id'], user['email'], coin_id, target_price, alert_type, order_type))
                 conn.commit()
-                flash("Alert set successfully", "success")
+                flash("Alert set successfully. You will receive email notifications when the price is reached.", "success")
             except mysql.connector.Error as err:
                 flash(f"Database error: {err}", "error")
             finally:
@@ -912,7 +1047,7 @@ def update_achievements():
     conn = get_db_connection()
     if conn:
         try:
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
             current_achievements = user['achievements'].split(',') if user['achievements'] else []
@@ -930,6 +1065,23 @@ def update_achievements():
                 cursor.close()
                 conn.close()
     return redirect(url_for('achievements'))
+
+@app.route('/test-email')
+def test_email():
+    try:
+        # Replace with your test email
+        test_email = 'frozenflames677@gmail.com'
+        success = send_email_notification(
+            recipient=test_email,
+            subject='Test Email from Crypto Tracker',
+            body='This is a test email to verify the email functionality is working.'
+        )
+        if success:
+            return 'Test email sent successfully! Check your inbox.'
+        else:
+            return 'Failed to send test email.', 500
+    except Exception as e:
+        return f'Error: {str(e)}', 500
 
 if __name__ == '__main__':
     try:

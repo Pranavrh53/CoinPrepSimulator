@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     crypto_bucks DECIMAL(15, 2) DEFAULT 10000.00,
-    risk_tolerance VARCHAR(20) DEFAULT 'Medium',
+    risk_tolerance VARCHAR(30) DEFAULT 'Medium',
+    risk_score INT DEFAULT 0,
     verification_code VARCHAR(6),
     verified TINYINT(1) DEFAULT 0,
     achievements TEXT,
@@ -29,9 +30,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     amount DECIMAL(15, 8),
     price DECIMAL(15, 2),
     type ENUM('buy', 'sell', 'limit', 'market', 'stop'),
+    sold_price DECIMAL(15, 2),
+    buy_transaction_id INT,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (wallet_id) REFERENCES wallets(id)
+    FOREIGN KEY (wallet_id) REFERENCES wallets(id),
+    FOREIGN KEY (buy_transaction_id) REFERENCES transactions(id)
 );
 
 CREATE TABLE IF NOT EXISTS watchlist (
@@ -45,6 +49,7 @@ CREATE TABLE IF NOT EXISTS watchlist (
 CREATE TABLE IF NOT EXISTS price_alerts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
+    user_email VARCHAR(100) NOT NULL,
     coin_id VARCHAR(50),
     target_price DECIMAL(15, 2),
     alert_type ENUM('above', 'below'),

@@ -82,7 +82,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     {% endfor %}
-                {% endif %}
+                {% endif %} 
             {% endwith %}
             {% if error %}
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -124,7 +124,9 @@
             {% endwith %}
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h3>Price Alert Notifications</h3>
-                <button class="btn btn-secondary" onclick="refreshNotifications()">Refresh Alerts</button>
+                <form method="POST" action="{{ url_for('refresh_alerts') }}">
+                    <button type="submit" class="btn btn-secondary">Refresh Alerts</button>
+                </form>
             </div>
             <div id="notificationsContainer">
                 {% if triggered_alerts %}
@@ -132,7 +134,7 @@
                         <div class="alert alert-warning alert-dismissible fade show" role="alert">
                             <strong>Alert!</strong> {{ alert.coin_id | capitalize }} price is {{ alert.alert_type }} ${{ alert.target_price | round(2) }} (Triggered at {{ alert.triggered_at }}).
                             <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary">Trade Now</a>
-                            <form method="POST" action="{{ url_for('dismiss_alert', alert_id=alert.id) }}" style="display:inline;">
+                            <form method="POST" action="{{ url_for('dismiss_alert', notification_id=alert.id) }}" style="display:inline;">
                                 <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
                             </form>
                         </div>
@@ -141,40 +143,8 @@
                     <p>No new alerts at this time.</p>
                 {% endif %}
             </div>
-            <script>
-                function refreshNotifications() {
-                    fetch('/check_alerts')
-                        .then(response => response.json())
-                        .then(data => {
-                            const container = document.getElementById('notificationsContainer');
-                            container.innerHTML = '';
-                            if (data.triggered_alerts && data.triggered_alerts.length > 0) {
-                                data.triggered_alerts.forEach(alert => {
-                                    const alertDiv = document.createElement('div');
-                                    alertDiv.className = 'alert alert-warning alert-dismissible fade show';
-                                    alertDiv.role = 'alert';
-                                    alertDiv.innerHTML = `
-                                        <strong>Alert!</strong> ${alert.coin_id.charAt(0).toUpperCase() + alert.coin_id.slice(1)} price is ${alert.alert_type} $${alert.target_price.toFixed(2)} (Triggered at ${alert.triggered_at}).
-                                        <a href="/live_market" class="btn btn-sm btn-primary">Trade Now</a>
-                                        <form method="POST" action="/dismiss_alert/${alert.id}" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
-                                        </form>
-                                    `;
-                                    container.appendChild(alertDiv);
-                                });
-                            } else {
-                                container.innerHTML = '<p>No new alerts at this time.</p>';
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error refreshing notifications:', error);
-                            const container = document.getElementById('notificationsContainer');
-                            container.innerHTML = '<p>Error loading alerts. Please try again later.</p>';
-                        });
-                }
-            </script>
             {% if user %}
-                <p><strong>CryptoBucks Balance:</strong> ${{ user.crypto_bucks }}</p>
+                <p><strong>CryptoBucks Balance:</strong> ${{ user.crypto_bucks | round(2) }}</p>
                 <p><strong>Risk Tolerance:</strong> {{ user.risk_tolerance }}</p>
             {% endif %}
             <h3>Market Overview (Top Market Caps)</h3>
@@ -193,9 +163,9 @@
                         {% for coin in coins %}
                             <tr>
                                 <td>{{ coin.name }}</td>
-                                <td>${{ coin.current_price }}</td>
-                                <td>{{ coin.price_change_percentage_24h }}%</td>
-                                <td>${{ coin.market_cap }}</td>
+                                <td>${{ coin.current_price | round(2) }}</td>
+                                <td>{{ coin.price_change_percentage_24h | round(2) }}%</td>
+                                <td>${{ coin.market_cap | round(2) }}</td>
                                 <td>
                                     <a href="#" class="btn btn-sm btn-info" onclick="showChart('{{ coin.id }}')">View Chart</a>
                                 </td>
@@ -314,9 +284,9 @@
                             <tr>
                                 <td>{{ coin.name }}</td>
                                 <td>{{ coin.symbol }}</td>
-                                <td>${{ coin.current_price }}</td>
-                                <td>{{ coin.price_change_percentage_24h }}%</td>
-                                <td>${{ coin.market_cap }}</td>
+                                <td>${{ coin.current_price | round(2) }}</td>
+                                <td>{{ coin.price_change_percentage_24h | round(2) }}%</td>
+                                <td>${{ coin.market_cap | round(2) }}</td>
                                 <td>
                                     <form method="POST" action="{{ url_for('trade') }}">
                                         <input type="hidden" name="coin_id" value="{{ coin.id }}">
@@ -328,7 +298,7 @@
                                                 <option value="" disabled selected>Select Wallet</option>
                                                 {% if wallets %}
                                                     {% for wallet in wallets %}
-                                                        <option value="{{ wallet[0] }}">{{ wallet[1] }}</option>
+                                                        <option value="{{ wallet.id }}">{{ wallet.name }}</option>
                                                     {% endfor %}
                                                 {% endif %}
                                             </select>
@@ -457,7 +427,7 @@
                         <option value="" disabled selected>Select Wallet</option>
                         {% if wallets %}
                             {% for wallet in wallets %}
-                                <option value="{{ wallet[0] }}">{{ wallet[1] }}</option>
+                                <option value="{{ wallet.id }}">{{ wallet.name }}</option>
                             {% endfor %}
                         {% endif %}
                     </select>
@@ -702,17 +672,17 @@
                             <tr>
                                 <td>Wallet {{ transaction.wallet_id }}</td>
                                 <td>{{ transaction.coin_id }}</td>
-                                <td>{{ transaction.amount }}</td>
+                                <td>{{ transaction.amount | round(8) }}</td>
                                 <td>${{ transaction.price | round(2) }}</td>
                                 <td>${{ transaction.sold_price | round(2) }}</td>
-                                <td>${{ transaction.profit | round(2) }}</td>
+                                <td>${{ transaction.profit }}</td>
                             </tr>
                         {% endfor %}
                     {% endif %}
                 </tbody>
             </table>
             {% if total_profit is defined and sold_transactions %}
-                <p><strong>Total Profit/Loss from Sold Coins:</strong> ${{ total_profit | round(2) }}</p>
+                <p><strong>Total Profit/Loss from Sold Coins:</strong> ${{ total_profit }}</p>
             {% endif %}
         {% elif section == 'watchlist' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
@@ -810,7 +780,7 @@
                             if (chartInstance) {
                                 chartInstance.destroy();
                             }
-                            chartInstance = new Chart.ctx, {
+                            chartInstance = new Chart(ctx, {
                                 type: 'line',
                                 data: {
                                     labels: data.dates,
@@ -889,7 +859,16 @@
             <h3>Set New Alert</h3>
             <form method="POST" action="{{ url_for('alerts') }}">
                 <div class="input-group mb-3">
-                    <input type="text" class="form-control" name="coin_id" placeholder="Coin ID (e.g., bitcoin)" required>
+                    {% if available_coins and available_coins|length > 0 %}
+                        <select name="coin_id" class="form-select" required>
+                            <option value="" disabled selected>Select a coin</option>
+                            {% for coin in available_coins %}
+                                <option value="{{ coin.id }}">{{ coin.name }} ({{ coin.symbol.upper() }})</option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        <input type="text" class="form-control" name="coin_id" placeholder="Enter Coin ID (e.g., bitcoin)" required>
+                    {% endif %}
                     <input type="number" class="form-control" name="target_price" placeholder="Target Price (USD)" step="0.01" required>
                     <select name="alert_type" class="form-select" required>
                         <option value="above">Above</option>
@@ -912,6 +891,7 @@
                         <th>Type</th>
                         <th>Order Type</th>
                         <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -919,10 +899,15 @@
                         {% for alert in alerts %}
                             <tr>
                                 <td>{{ alert.coin_id }}</td>
-                                <td>${{ alert.target_price }}</td>
+                                <td>${{ alert.target_price | round(2) }}</td>
                                 <td>{{ alert.alert_type }}</td>
                                 <td>{{ alert.order_type }}</td>
                                 <td>{{ alert.status }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('remove_alert', alert_id=alert.id) }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                                    </form>
+                                </td>
                             </tr>
                         {% endfor %}
                     {% endif %}
@@ -997,6 +982,13 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
+            <h3>Add Achievement</h3>
+            <form method="POST" action="{{ url_for('update_achievements') }}">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" name="achievement" placeholder="Achievement name" required>
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </form>
             <ul class="list-group">
                 {% if achievements %}
                     {% for achievement in achievements %}

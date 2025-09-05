@@ -1,102 +1,146 @@
+/* === Design System === */
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+    --background-color: #f4f7fc;
+    --text-color: #212529;
+    --card-bg: #ffffff;
+    --border-color: #dee2e6;
+    --border-radius: 0.5rem;
+    --box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    --font-family-sans-serif: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* === Base & Typography === */
 body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 20px;
-    background-color: #f4f4f4;
+    font-family: var(--font-family-sans-serif);
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
 }
 
-.container {
-    max-width: 800px;
-    margin: 0 auto;
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+h1, h2, h3, h4, h5, h6 {
+    color: var(--dark-color);
+    font-weight: 600;
 }
 
-h1, h2 {
-    color: #333;
-}
-
-form {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-input, select, button {
-    padding: 10px;
-    font-size: 16px;
-}
-
-button {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: #218838;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-th, td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-}
-
-th {
-    background-color: #f8f9fa;
-}
-
-nav {
-    margin: 20px 0;
-}
-
-nav a {
-    margin-right: 10px;
+a {
+    color: var(--primary-color);
     text-decoration: none;
-    color: #007bff;
+    transition: color 0.2s ease-in-out;
 }
 
-.error {
-    color: red;
+a:hover {
+    color: darken(var(--primary-color), 10%);
+    text-decoration: underline;
 }
 
-.info {
-    color: blue;
-}
-
-.success {
-    color: green;
-}
+/* === Layout === */
 .container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
+    max-width: 1200px;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
 }
-.error {
-    color: red;
+
+/* === Components === */
+
+/* Cards */
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    margin-bottom: 1.5rem;
 }
-.info {
-    color: blue;
+
+.card-header {
+    font-weight: 600;
+    background-color: transparent;
+    border-bottom: 1px solid var(--border-color);
 }
-.success {
-    color: green;
+
+/* Buttons */
+.btn {
+    font-weight: 600;
+    border-radius: 50px;
+    padding: 0.6rem 1.5rem;
+    transition: all 0.2s ease-in-out;
 }
-table {
-    width: 100%;
-    border-collapse: collapse;
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
-th, td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
+
+/* Forms */
+.form-control {
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
+}
+
+/* Navigation */
+.navbar {
+    background-color: var(--card-bg);
+    box-shadow: var(--box-shadow);
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+.nav-link {
+    font-weight: 500;
+}
+
+/* Tables */
+.table {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    overflow: hidden; /* Ensures border-radius is respected by children */
+}
+
+.table thead {
+    background-color: var(--light-color);
+}
+
+.table th {
+    border: none;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    letter-spacing: 0.5px;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Alerts */
+.alert {
+    border-radius: var(--border-radius);
+    border-width: 0;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+
+/* === Utility Classes === */
+.text-success { color: var(--success-color) !important; }
+.text-danger { color: var(--danger-color) !important; }
+.text-warning { color: var(--warning-color) !important; }
+
+/* === Specific Sections === */
+#priceChart, #correlationChart {
+    background-color: var(--card-bg);
+    padding: 1rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
 }
