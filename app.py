@@ -361,56 +361,61 @@ def risk_quiz():
         {
             'id': 'q1',
             'text': 'How would you react to a 20% drop in your portfolio value in a month?',
+            'explanation': 'This question helps determine your emotional response to market volatility.',
             'options': [
-                {'value': 1, 'text': 'Sell all investments immediately'},
-                {'value': 2, 'text': 'Sell some to reduce risk'},
-                {'value': 3, 'text': 'Hold and wait for recovery'},
-                {'value': 4, 'text': 'Buy more to lower cost'},
-                {'value': 5, 'text': 'Significantly increase position'}
+                {'value': 1, 'text': 'Sell all investments immediately', 'explanation': 'Suggests low risk tolerance and potential panic selling during downturns.'},
+                {'value': 2, 'text': 'Sell some to reduce risk', 'explanation': 'Indicates a cautious approach to risk management.'},
+                {'value': 3, 'text': 'Hold and wait for recovery', 'explanation': 'Shows a balanced approach to market fluctuations.'},
+                {'value': 4, 'text': 'Buy more to lower cost', 'explanation': 'Suggests a contrarian investment strategy and higher risk tolerance.'},
+                {'value': 5, 'text': 'Significantly increase position', 'explanation': 'Indicates high risk tolerance and strong belief in long-term growth.'}
             ]
         },
         {
             'id': 'q2',
             'text': 'What is your investment time horizon?',
+            'explanation': 'Your investment horizon affects your ability to handle market volatility.',
             'options': [
-                {'value': 1, 'text': 'Less than 1 year'},
-                {'value': 3, 'text': '1-3 years'},
-                {'value': 5, 'text': '3-5 years'},
-                {'value': 8, 'text': '5-10 years'},
-                {'value': 10, 'text': '10+ years'}
+                {'value': 1, 'text': 'Less than 1 year', 'explanation': 'Short-term horizons require more conservative investments.'},
+                {'value': 3, 'text': '1-3 years', 'explanation': 'Medium-term goals can handle some volatility.'},
+                {'value': 5, 'text': '3-5 years', 'explanation': 'Allows for a balanced approach between growth and stability.'},
+                {'value': 8, 'text': '5-10 years', 'explanation': 'Longer timeframes can accommodate more growth-oriented investments.'},
+                {'value': 10, 'text': '10+ years', 'explanation': 'Extended horizons can weather significant market cycles.'}
             ]
         },
         {
             'id': 'q3',
             'text': 'What percentage of your income do you invest?',
+            'explanation': 'This helps assess your capacity for risk based on your investment rate.',
             'options': [
-                {'value': 1, 'text': 'Less than 5%'},
-                {'value': 3, 'text': '5-10%'},
-                {'value': 5, 'text': '10-20%'},
-                {'value': 7, 'text': '20-30%'},
-                {'value': 10, 'text': 'More than 30%'}
+                {'value': 1, 'text': 'Less than 5%', 'explanation': 'Conservative approach to investing.'},
+                {'value': 3, 'text': '5-10%', 'explanation': 'Moderate investment rate with room for growth.'},
+                {'value': 5, 'text': '10-20%', 'explanation': 'Aggressive saving and investing strategy.'},
+                {'value': 7, 'text': '20-30%', 'explanation': 'Highly committed to building wealth through investments.'},
+                {'value': 10, 'text': 'More than 30%', 'explanation': 'Maximum commitment to long-term wealth building.'}
             ]
         },
         {
             'id': 'q4',
             'text': 'Your investment knowledge level?',
+            'explanation': 'Understanding investments helps in making informed decisions during market fluctuations.',
             'options': [
-                {'value': 1, 'text': 'Beginner'},
-                {'value': 3, 'text': 'Some knowledge'},
-                {'value': 5, 'text': 'Experienced'},
-                {'value': 7, 'text': 'Advanced'},
-                {'value': 10, 'text': 'Expert'}
+                {'value': 1, 'text': 'Beginner', 'explanation': 'New to investing, still learning the basics.'},
+                {'value': 3, 'text': 'Some knowledge', 'explanation': 'Familiar with basic investment concepts.'},
+                {'value': 5, 'text': 'Experienced', 'explanation': 'Comfortable with most investment vehicles and strategies.'},
+                {'value': 7, 'text': 'Advanced', 'explanation': 'Knowledgeable about complex investment strategies.'},
+                {'value': 10, 'text': 'Expert', 'explanation': 'Extensive experience with all aspects of investing.'}
             ]
         },
         {
             'id': 'q5',
             'text': 'Your main investment goal?',
+            'explanation': 'Different goals require different investment approaches.',
             'options': [
-                {'value': 1, 'text': 'Preserve capital'},
-                {'value': 3, 'text': 'Generate income'},
-                {'value': 5, 'text': 'Balanced growth'},
-                {'value': 8, 'text': 'Long-term growth'},
-                {'value': 10, 'text': 'Maximum returns'}
+                {'value': 1, 'text': 'Preserve capital', 'explanation': 'Focus on protecting your initial investment.'},
+                {'value': 3, 'text': 'Generate income', 'explanation': 'Focus on regular income generation.'},
+                {'value': 5, 'text': 'Balanced growth', 'explanation': 'Mix of income and capital appreciation.'},
+                {'value': 8, 'text': 'Long-term growth', 'explanation': 'Focus on capital appreciation over time.'},
+                {'value': 10, 'text': 'Maximum returns', 'explanation': 'Pursue highest possible returns, accepting higher risk.'}
             ]
         }
     ]
@@ -420,22 +425,67 @@ def risk_quiz():
             # Calculate total score (max 45 points)
             score = sum(int(request.form.get(question['id'], 0)) for question in questions)
             
-            # Determine risk level
+            # Determine risk level and recommendations
             if score <= 10:
                 risk_level = 'Conservative (1/5)'
                 risk_percent = 20
+                recommendation = '''
+                <h4>Recommended Strategy:</h4>
+                <ul>
+                    <li>Focus on capital preservation with low-volatility assets</li>
+                    <li>Consider high-quality bonds and stable dividend stocks</li>
+                    <li>Maintain higher cash positions</li>
+                    <li>Consider index funds with low volatility</li>
+                </ul>
+                '''
             elif score <= 20:
-                risk_level = 'Moderate (2/5)'
+                risk_level = 'Moderately Conservative (2/5)'
                 risk_percent = 40
+                recommendation = '''
+                <h4>Recommended Strategy:</h4>
+                <ul>
+                    <li>Balanced approach with income-generating assets</li>
+                    <li>Consider a mix of bonds and blue-chip stocks</li>
+                    <li>Diversify across sectors and asset classes</li>
+                    <li>Consider target-date or balanced mutual funds</li>
+                </ul>
+                '''
             elif score <= 30:
                 risk_level = 'Balanced (3/5)'
                 risk_percent = 60
+                recommendation = '''
+                <h4>Recommended Strategy:</h4>
+                <ul>
+                    <li>Equal balance of growth and income investments</li>
+                    <li>Mix of stocks and bonds based on your time horizon</li>
+                    <li>Consider index funds and ETFs for broad market exposure</li>
+                    <li>Rebalance portfolio annually</li>
+                </ul>
+                '''
             elif score <= 38:
-                risk_level = 'Growth (4/5)'
+                risk_level = 'Growth-Oriented (4/5)'
                 risk_percent = 80
+                recommendation = '''
+                <h4>Recommended Strategy:</h4>
+                <ul>
+                    <li>Focus on long-term capital appreciation</li>
+                    <li>Higher allocation to stocks, particularly growth stocks</li>
+                    <li>Consider sector-specific ETFs or thematic investments</li>
+                    <li>Include some international exposure</li>
+                </ul>
+                '''
             else:
                 risk_level = 'Aggressive (5/5)'
                 risk_percent = 100
+                recommendation = '''
+                <h4>Recommended Strategy:</h4>
+                <ul>
+                    <li>Maximum growth potential with high-risk assets</li>
+                    <li>Significant allocation to growth stocks and alternative investments</li>
+                    <li>Consider small-cap, emerging markets, and sector-specific funds</li>
+                    <li>Be prepared for significant short-term volatility</li>
+                </ul>
+                '''
             
             # Update database
             conn = get_db_connection()

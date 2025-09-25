@@ -921,44 +921,301 @@
                     <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
                     <a class="nav-link" href="{{ url_for('watchlist') }}">Watchlist</a>
                     <a class="nav-link" href="{{ url_for('alerts') }}">Price Alerts</a>
+                    <a class="nav-link active" href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
                     <a class="nav-link" href="{{ url_for('achievements') }}">Achievements</a>
                     <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                 </div>
             </nav>
-            <h2>Risk Tolerance Quiz</h2>
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            
+            <div class="container mt-4">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="mb-0">Investment Risk Tolerance Assessment</h2>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                        
+                        <div class="alert alert-info">
+                            <h5>About This Assessment</h5>
+                            <p>This quiz will help determine your investment risk tolerance by evaluating your financial situation, investment goals, and comfort with market fluctuations. Your answers will help us recommend an investment strategy that matches your risk profile.</p>
                         </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-            <form method="POST" action="{{ url_for('risk_quiz') }}">
-                <div class="mb-3">
-                    <label class="form-label">1. How would you react to a 20% drop in your portfolio? (1 = Sell immediately, 5 = Hold long-term)</label>
-                    <input type="number" class="form-control" name="q1" min="1" max="5" required>
+                        
+                        <form method="POST" action="{{ url_for('risk_quiz') }}" class="mt-4">
+                            {% for question in questions %}
+                                <div class="card mb-4">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">
+                                            {{ loop.index }}. {{ question.text }}
+                                            <small class="text-muted ms-2" data-bs-toggle="tooltip" title="{{ question.explanation }}">
+                                                <i class="bi bi-info-circle">ℹ️</i>
+                                            </small>
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        {% for option in question.options %}
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="radio" name="{{ question.id }}" id="{{ question.id }}_{{ loop.index }}" value="{{ option.value }}" required>
+                                                <label class="form-check-label d-flex align-items-center" for="{{ question.id }}_{{ loop.index }}">
+                                                    {{ option.text }}
+                                                    <small class="text-muted ms-2" data-bs-toggle="tooltip" title="{{ option.explanation }}">
+                                                        <i class="bi bi-info-circle">ℹ️</i>
+                                                    </small>
+                                                </label>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                                <button type="reset" class="btn btn-outline-secondary me-md-2">Reset</button>
+                                <button type="submit" class="btn btn-primary">Submit Assessment</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">2. What portion of your savings are you willing to invest? (1 = 0-10%, 5 = 50%+)</label>
-                    <input type="number" class="form-control" name="q2" min="1" max="5" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">3. How often do you check your investments? (1 = Daily, 5 = Rarely)</label>
-                    <input type="number" class="form-control" name="q3" min="1" max="5" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">4. Are you comfortable with volatile markets? (1 = No, 5 = Yes)</label>
-                    <input type="number" class="form-control" name="q4" min="1" max="5" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">5. What is your investment horizon? (1 = <1 year, 5 = >10 years)</label>
-                    <input type="number" class="form-control" name="q5" min="1" max="5" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Submit</button>
+            </div>
+            
+            <style>
+                .form-check-input:checked + .form-check-label {
+                    font-weight: 500;
+                    color: #0d6efd;
+                }
+                .card {
+                    border: none;
+                    border-radius: 10px;
+                }
+                .card-header {
+                    border-radius: 10px 10px 0 0 !important;
+                }
+                .btn-primary {
+                    padding: 0.5rem 2rem;
+                    border-radius: 5px;
+                }
+                [data-bs-toggle="tooltip"] {
+                    cursor: help;
+                    text-decoration: none;
+                }
+            </style>
+            
+            <script>
+                // Initialize tooltips
+                document.addEventListener('DOMContentLoaded', function() {
+                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                        return new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+                });
+            </script>
             </form>
+            
+        {% elif section == 'risk_quiz_result' %}
+            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+                <div class="navbar-nav">
+                    <a class="nav-link" href="{{ url_for('live_market') }}">Live Market</a>
+                    <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
+                    <a class="nav-link" href="{{ url_for('watchlist') }}">Watchlist</a>
+                    <a class="nav-link" href="{{ url_for('alerts') }}">Price Alerts</a>
+                    <a class="nav-link active" href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}">Achievements</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                </div>
+            </nav>
+            
+            <div class="container mt-4">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="mb-0">Your Risk Profile Assessment</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-5">
+                            <h3 class="mb-3">Your Risk Tolerance: <strong>{{ risk_level }}</strong></h3>
+                            
+                            <!-- Risk Meter -->
+                            <div class="progress mb-4" style="height: 30px; border-radius: 15px; background-color: #e9ecef;">
+                                <div class="progress-bar bg-danger" role="progressbar" style="width: {{ risk_percent }}%" 
+                                     aria-valuenow="{{ risk_percent }}" aria-valuemin="0" aria-valuemax="100">
+                                    {{ risk_percent }}%
+                                </div>
+                            </div>
+                            
+                            <div class="row
+                                {% if risk_percent <= 20 %}
+                                    text-danger
+                                {% elif risk_percent <= 40 %}
+                                    text-warning
+                                {% elif risk_percent <= 60 %}
+                                    text-primary
+                                {% elif risk_percent <= 80 %}
+                                    text-info
+                                {% else %}
+                                    text-success
+                                {% endif %}
+                                mb-4">
+                                <div class="col">
+                                    <i class="bi bi-shield-lock" style="font-size: 3rem;"></i>
+                                    <div>Conservative</div>
+                                </div>
+                                <div class="col">
+                                    <i class="bi bi-shield" style="font-size: 3rem;"></i>
+                                    <div>Moderate</div>
+                                </div>
+                                <div class="col">
+                                    <i class="bi bi-shield-check" style="font-size: 3rem;"></i>
+                                    <div>Balanced</div>
+                                </div>
+                                <div class="col">
+                                    <i class="bi bi-shield-plus" style="font-size: 3rem;"></i>
+                                    <div>Growth</div>
+                                </div>
+                                <div class="col">
+                                    <i class="bi bi-shield-shaded" style="font-size: 3rem;"></i>
+                                    <div>Aggressive</div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <h5>What This Means</h5>
+                                <p>Based on your responses, your risk tolerance score is <strong>{{ score }} out of {{ max_score }}</strong>. This places you in the <strong>{{ risk_level }}</strong> category for investing. Here's what that means for your investment strategy:</p>
+                                {{ recommendation|safe }}
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header bg-light">
+                                        <h5 class="mb-0">Suggested Asset Allocation</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="allocationChart" height="300"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header bg-light">
+                                        <h5 class="mb-0">Investment Tips</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="list-group list-group-flush">
+                                            <li class="list-group-item">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                Review your portfolio at least quarterly
+                                            </li>
+                                            <li class="list-group-item">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                Consider dollar-cost averaging for new investments
+                                            </li>
+                                            <li class="list-group-item">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                Rebalance your portfolio when allocations shift by more than 5%
+                                            </li>
+                                            <li class="list-group-item">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                Stay diversified across different asset classes
+                                            </li>
+                                            <li class="list-group-item">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                Consider consulting with a financial advisor for personalized advice
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button class="btn btn-outline-primary" onclick="window.print()">
+                                <i class="bi bi-printer"></i> Print Your Results
+                            </button>
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-primary ms-2">
+                                <i class="bi bi-house"></i> Back to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+                // Asset allocation chart
+                document.addEventListener('DOMContentLoaded', function() {
+                    const ctx = document.getElementById('allocationChart').getContext('2d');
+                    
+                    // Dynamic allocation based on risk level
+                    let data = [];
+                    let labels = [];
+                    let backgroundColors = [];
+                    
+                    if ({{ risk_percent }} <= 20) {
+                        // Conservative
+                        data = [60, 30, 10];
+                        labels = ['Bonds & Fixed Income', 'Large Cap Stocks', 'Cash & Equivalents'];
+                        backgroundColors = ['#4e73df', '#1cc88a', '#36b9cc'];
+                    } else if ({{ risk_percent }} <= 40) {
+                        // Moderately Conservative
+                        data = [45, 40, 10, 5];
+                        labels = ['Bonds & Fixed Income', 'Large Cap Stocks', 'International Stocks', 'Cash'];
+                        backgroundColors = ['#4e73df', '#1cc88a', '#f6c23e', '#36b9cc'];
+                    } else if ({{ risk_percent }} <= 60) {
+                        // Balanced
+                        data = [40, 35, 15, 10];
+                        labels = ['Large Cap Stocks', 'Bonds', 'International Stocks', 'Small/Mid Cap'];
+                        backgroundColors = ['#1cc88a', '#4e73df', '#f6c23e', '#e74a3b'];
+                    } else if ({{ risk_percent }} <= 80) {
+                        // Growth-Oriented
+                        data = [50, 20, 15, 10, 5];
+                        labels = ['Large Cap Growth', 'International Stocks', 'Small/Mid Cap', 'Emerging Markets', 'Bonds'];
+                        backgroundColors = ['#1cc88a', '#f6c23e', '#e74a3b', '#5a5c69', '#4e73df'];
+                    } else {
+                        // Aggressive
+                        data = [40, 25, 20, 10, 5];
+                        labels = ['Large Cap Growth', 'Small/Mid Cap', 'International Growth', 'Emerging Markets', 'Sector-Specific'];
+                        backgroundColors = ['#1cc88a', '#e74a3b', '#f6c23e', '#5a5c69', '#36b9cc'];
+                    }
+                    
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: data,
+                                backgroundColor: backgroundColors,
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.raw || 0;
+                                            return `${label}: ${value}%`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+            </script>
+            
         {% elif section == 'achievements' %}
             <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
