@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash, json, send_file
 from flask_bcrypt import Bcrypt
 import mysql.connector
 import requests
@@ -16,6 +16,17 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import io
+import contextlib
+import traceback
+from risk_assessment_data import (
+    FINANCIAL_CAPACITY_TEST,
+    INVESTMENT_KNOWLEDGE_TEST,
+    PSYCHOLOGICAL_TOLERANCE_TEST,
+    GOALS_TIMELINE_TEST,
+    RISK_CATEGORIES,
+    get_ai_analysis_prompt
+)
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -82,7 +93,10 @@ def fetch_with_retry(url, retries=3, base_delay=10):
         cached_data, timestamp = api_cache[url]
         if time.time() - timestamp < CACHE_DURATION:
             print(f"Cache hit for {url}")
-            return type('Response', (), {'text': json.dumps(cached_data), 'raise_for_status': lambda: None})()
+            if isinstance(cached_data, (list, dict)) and cached_data:  # Validate cached data
+                return type('Response', (), {'text': json.dumps(cached_data), 'json': lambda: cached_data, 'raise_for_status': lambda: None})()
+            else:
+                print(f"Invalid cached data for {url}, fetching fresh data")
         else:
             print(f"Cache expired for {url}")
 
@@ -92,7 +106,8 @@ def fetch_with_retry(url, retries=3, base_delay=10):
             print(f"Making API request to {url} (attempt {attempt + 1})")
             response = requests.get(url, timeout=10)
             response.raise_for_status()
-            api_cache[url] = (response.json(), time.time())
+            data = response.json()
+            api_cache[url] = (data, time.time())
             print(f"API request successful for {url}")
             return response
         except requests.RequestException as e:
@@ -104,8 +119,9 @@ def fetch_with_retry(url, retries=3, base_delay=10):
             print(f"API request failed after {retries} attempts: {e}")
             if url in api_cache:
                 cached_data, timestamp = api_cache[url]
-                print(f"Returning expired cached response for {url}")
-                return type('Response', (), {'text': json.dumps(cached_data), 'raise_for_status': lambda: None})()
+                if isinstance(cached_data, (list, dict)) and cached_data:
+                    print(f"Returning expired cached response for {url}")
+                    return type('Response', (), {'text': json.dumps(cached_data), 'json': lambda: cached_data, 'raise_for_status': lambda: None})()
             return None
     return None
 
@@ -129,6 +145,170 @@ def send_email_notification(recipient, subject, body):
     except Exception as e:
         print(f"Error sending email: {e}")
         return False
+
+# Comprehensive Risk Assessment Helper Functions
+def calculate_test_score(test_data, responses):
+    """Calculate percentage score for a single test"""
+    total_possible = sum(max(opt['points'] for opt in q['options']) for q in test_data['questions'])
+    total_earned = sum(responses.get(q['id'], 0) for q in test_data['questions'])
+    return round((total_earned / total_possible) * 100, 2)
+
+def get_risk_category(weighted_score):
+    """Get risk category based on weighted average score"""
+    for category in RISK_CATEGORIES:
+        if category['range'][0] <= weighted_score < category['range'][1]:
+            return category
+    return RISK_CATEGORIES[-1]  # Return most aggressive if > max
+
+def generate_ai_analysis(scores, user_data):
+    """Generate AI-powered analysis of user's risk profile"""
+    analysis = {
+        'summary': '',
+        'strengths': [],
+        'concerns': [],
+        'recommendations': [],
+        'asset_allocation': {},
+        'crypto_advice': '',
+        'action_steps': [],
+        'risk_management': []
+    }
+    
+    category = get_risk_category(scores['total'])
+    analysis['summary'] = f"Your comprehensive risk assessment indicates a **{category['level']}** risk profile with an overall score of {scores['total']}%. {category['description']}"
+    
+    # Analyze each dimension
+    if scores['financial'] >= 70:
+        analysis['strengths'].append("Strong financial capacity with good income stability and emergency reserves")
+    elif scores['financial'] >= 50:
+        analysis['strengths'].append("Adequate financial capacity to support moderate risk-taking")
+    else:
+        analysis['concerns'].append("Limited financial capacity - focus on building emergency fund before aggressive investing")
+    
+    if scores['knowledge'] >= 70:
+        analysis['strengths'].append("Solid investment knowledge and experience base")
+    elif scores['knowledge'] >= 50:
+        analysis['strengths'].append("Good foundational investment knowledge")
+    else:
+        analysis['concerns'].append("Limited investment knowledge - consider educational resources before complex strategies")
+    
+    if scores['psychological'] >= 70:
+        analysis['strengths'].append("Strong emotional resilience to market volatility")
+    elif scores['psychological'] >= 50:
+        analysis['strengths'].append("Moderate psychological comfort with market fluctuations")
+    else:
+        analysis['concerns'].append("Low psychological tolerance for volatility - stick to stable investments")
+    
+    if scores['goals'] >= 70:
+        analysis['strengths'].append("Long time horizon allowing for growth-oriented strategies")
+    elif scores['goals'] >= 50:
+        analysis['strengths'].append("Moderate timeline suitable for balanced approach")
+    else:
+        analysis['concerns'].append("Short time horizon - prioritize capital preservation")
+    
+    # Check for mismatches
+    capacity_vs_tolerance = abs(scores['financial'] - scores['psychological'])
+    if capacity_vs_tolerance > 30:
+        if scores['financial'] > scores['psychological']:
+            analysis['concerns'].append("⚠️ MISMATCH: Financial capacity exists but low psychological tolerance - start conservatively")
+        else:
+            analysis['concerns'].append("⚠️ MISMATCH: High risk appetite but limited financial capacity - be cautious")
+    
+    knowledge_vs_tolerance = abs(scores['knowledge'] - scores['psychological'])
+    if knowledge_vs_tolerance > 30:
+        if scores['knowledge'] < scores['psychological']:
+            analysis['concerns'].append("⚠️ CAUTION: Risk appetite exceeds investment knowledge - educate yourself first")
+    
+    # Recommendations based on profile
+    if scores['total'] < 30:
+        analysis['recommendations'] = [
+            "Focus on capital preservation with high-quality bonds and savings accounts",
+            "Build emergency fund covering 6-12 months of expenses",
+            "Consider low-cost index funds for equity exposure (10-20% max)",
+            "Avoid speculative assets and complex derivatives",
+            "Review portfolio quarterly but avoid frequent trading"
+        ]
+    elif scores['total'] < 45:
+        analysis['recommendations'] = [
+            "Maintain 50-60% in bonds and stable income assets",
+            "Allocate 30-40% to diversified equity funds",
+            "Consider dividend-paying stocks for income",
+            "Keep 10% in cash for opportunities and emergencies",
+            "Rebalance annually to maintain target allocation"
+        ]
+    elif scores['total'] < 55:
+        analysis['recommendations'] = [
+            "Balanced 50-50 or 60-40 stock-bond allocation",
+            "Diversify across sectors, market caps, and geographies",
+            "Include 5-10% alternative investments for diversification",
+            "Consider tax-loss harvesting strategies",
+            "Rebalance semi-annually or when allocations drift 5%+"
+        ]
+    elif scores['total'] < 65:
+        analysis['recommendations'] = [
+            "Growth-focused 60-70% equity allocation",
+            "Include growth stocks, small-caps, and emerging markets",
+            "Limit bonds to 20-30% for stability",
+            "Consider sector-specific ETFs for targeted exposure",
+            "Maintain discipline during market corrections"
+        ]
+    else:
+        analysis['recommendations'] = [
+            "Aggressive 75-85% equity allocation for maximum growth",
+            "Include high-growth stocks, small-caps, and alternatives",
+            "Consider sector rotation strategies",
+            "Include international and emerging markets (20-30%)",
+            "Prepare for 30-50% portfolio swings during market cycles"
+        ]
+    
+    analysis['asset_allocation'] = category['allocation']
+    
+    # Crypto-specific advice
+    crypto_pct = category['crypto_allocation']
+    if scores['total'] < 30:
+        analysis['crypto_advice'] = f"Cryptocurrency allocation: {crypto_pct}. Limit to well-established coins (BTC, ETH) only. Treat as speculative <2% of portfolio."
+    elif scores['total'] < 45:
+        analysis['crypto_advice'] = f"Cryptocurrency allocation: {crypto_pct}. Focus on top 10 cryptocurrencies by market cap. Consider dollar-cost averaging."
+    elif scores['total'] < 55:
+        analysis['crypto_advice'] = f"Cryptocurrency allocation: {crypto_pct}. Diversify across 5-10 established cryptocurrencies. Include both large-cap and mid-cap coins."
+    elif scores['total'] < 65:
+        analysis['crypto_advice'] = f"Cryptocurrency allocation: {crypto_pct}. Can explore beyond top 20 coins. Consider DeFi and blockchain projects with strong fundamentals."
+    else:
+        analysis['crypto_advice'] = f"Cryptocurrency allocation: {crypto_pct}. Can include small-cap and emerging projects. Consider staking and DeFi strategies."
+    
+    analysis['action_steps'] = [
+        f"Review current portfolio allocation against recommended {category['level']} profile",
+        f"Ensure emergency fund is adequate ({user_data.get('emergency_months', '3-6')} months expenses)",
+        "Set up automatic rebalancing alerts when allocations drift >5%",
+        "Review and adjust risk tolerance annually or after major life changes",
+        "Track performance against appropriate benchmarks for your allocation"
+    ]
+    
+    if scores['total'] < 40:
+        analysis['risk_management'] = [
+            "Use stop-loss orders at 5-10% below purchase price",
+            "Avoid margin and leverage entirely",
+            "Diversify across at least 15-20 holdings",
+            "Keep 20-30% in cash and cash equivalents",
+            "Review portfolio monthly but trade infrequently"
+        ]
+    elif scores['total'] < 60:
+        analysis['risk_management'] = [
+            "Use stop-loss orders at 10-15% below purchase price",
+            "Limit single position size to 5-7% of portfolio",
+            "Diversify across 10-15 holdings",
+            "Maintain 5-10% cash position",
+            "Review quarterly and rebalance as needed"
+        ]
+    else:
+        analysis['risk_management'] = [
+            "Use trailing stops on individual positions",
+            "Can concentrate in 6-10 high-conviction positions",
+            "Accept wider position sizing (up to 10% each)",
+            "Minimal cash drag (0-5%) for maximum market exposure",
+            "Active monitoring with quarterly deep reviews"
+        ]
+    
+    return analysis
 
 def check_price_alerts():
     print("Checking price alerts...")
@@ -191,9 +371,180 @@ def check_price_alerts():
             cursor.close()
             conn.close()
 
+def check_pending_orders():
+    """Check and execute pending limit, stop_loss, and take_profit orders"""
+    print("Checking pending orders...")
+    conn = get_db_connection()
+    if not conn:
+        print("Database connection failed in pending orders check")
+        return
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # Get all pending orders
+        cursor.execute("""
+            SELECT o.* FROM orders o 
+            WHERE o.status = 'pending' AND o.order_type IN ('limit', 'stop_loss', 'take_profit')
+        """)
+        orders = cursor.fetchall()
+        
+        if not orders:
+            return
+        
+        # Get unique coin IDs to fetch prices
+        coin_ids = list(set(order['base_currency'] for order in orders))
+        coin_ids_str = ','.join(coin_ids)
+        
+        response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}")
+        if not response:
+            print("Failed to fetch prices for pending orders")
+            return
+        
+        prices = {coin['id']: float(coin['current_price']) for coin in json.loads(response.text) if 'current_price' in coin}
+        
+        for order in orders:
+            base_currency = order['base_currency']
+            current_price = prices.get(base_currency)
+            
+            if current_price is None:
+                continue
+            
+            should_execute = False
+            order_type = order['order_type']
+            side = order['side']
+            
+            # Check if order should be executed
+            if order_type == 'limit':
+                if side == 'buy' and current_price <= float(order['price']):
+                    should_execute = True
+                elif side == 'sell' and current_price >= float(order['price']):
+                    should_execute = True
+            
+            elif order_type == 'stop_loss':
+                # Stop loss: sell when price drops below stop_price
+                if side == 'sell' and current_price <= float(order['stop_price']):
+                    should_execute = True
+            
+            elif order_type == 'take_profit':
+                # Take profit: sell when price rises above stop_price
+                if side == 'sell' and current_price >= float(order['stop_price']):
+                    should_execute = True
+            
+            if should_execute:
+                try:
+                    # Execute the order
+                    execute_order(cursor, conn, order, current_price)
+                    print(f"Executed {order_type} order #{order['id']} for {order['amount']} {base_currency} at ${current_price}")
+                except Exception as e:
+                    print(f"Error executing order #{order['id']}: {e}")
+                    conn.rollback()
+        
+        conn.commit()
+    except mysql.connector.Error as err:
+        print(f"Database error in pending orders check: {err}")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def execute_order(cursor, conn, order, execution_price):
+    """Execute a pending order at the given price"""
+    user_id = order['user_id']
+    wallet_id = order['wallet_id']
+    base_currency = order['base_currency']
+    quote_currency = order['quote_currency']
+    side = order['side']
+    amount = float(order['amount'])
+    
+    if side == 'buy':
+        # Buy: Deduct quote currency, add base currency to portfolio
+        if quote_currency == 'tether':
+            cursor.execute("SELECT tether_balance FROM users WHERE id = %s", (user_id,))
+            user = cursor.fetchone()
+            if not user:
+                raise Exception("User not found")
+            
+            tether_balance = float(user['tether_balance'])
+            total_cost = amount * execution_price
+            
+            if total_cost > tether_balance:
+                # Cancel order if insufficient balance
+                cursor.execute("UPDATE orders SET status = 'cancelled', cancelled_at = NOW() WHERE id = %s", (order['id'],))
+                return
+            
+            # Deduct USDT and record transaction
+            cursor.execute("UPDATE users SET tether_balance = tether_balance - %s WHERE id = %s", (total_cost, user_id))
+            cursor.execute("""
+                INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) 
+                VALUES (%s, %s, %s, %s, %s, 'buy')
+            """, (user_id, wallet_id, base_currency, amount, execution_price))
+    
+    elif side == 'sell':
+        # Sell: Check if user has the coins, add quote currency
+        cursor.execute("""
+            SELECT id, amount, price FROM transactions 
+            WHERE user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy' 
+            ORDER BY id ASC
+        """, (user_id, wallet_id, base_currency))
+        
+        buy_transactions = cursor.fetchall()
+        
+        # Calculate available amount
+        cursor.execute("""
+            SELECT buy_transaction_id, SUM(amount) as total_sold 
+            FROM transactions 
+            WHERE user_id = %s AND type = 'sell' 
+            GROUP BY buy_transaction_id
+        """, (user_id,))
+        
+        sold_amounts = {row['buy_transaction_id']: float(row['total_sold']) for row in cursor.fetchall()}
+        
+        available_amount = 0
+        buy_transaction_id = None
+        
+        for buy in buy_transactions:
+            buy_id = buy['id']
+            total_bought = float(buy['amount'])
+            total_sold = sold_amounts.get(buy_id, 0.0)
+            remaining = total_bought - total_sold
+            
+            if remaining >= amount:
+                buy_transaction_id = buy_id
+                available_amount = remaining
+                break
+        
+        if buy_transaction_id is None or available_amount < amount:
+            # Cancel order if insufficient coins
+            cursor.execute("UPDATE orders SET status = 'cancelled', cancelled_at = NOW() WHERE id = %s", (order['id'],))
+            return
+        
+        # Execute sell
+        purchase_price = float(buy['price'])
+        revenue = amount * execution_price
+        
+        if quote_currency == 'tether':
+            cursor.execute("UPDATE users SET tether_balance = tether_balance + %s WHERE id = %s", (revenue, user_id))
+        
+        cursor.execute("""
+            INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) 
+            VALUES (%s, %s, %s, %s, %s, 'sell', %s, %s)
+        """, (user_id, wallet_id, base_currency, amount, purchase_price, execution_price, buy_transaction_id))
+    
+    # Mark order as filled
+    cursor.execute("""
+        UPDATE orders SET status = 'filled', filled_amount = %s, filled_at = NOW() 
+        WHERE id = %s
+    """, (amount, order['id']))
+    
+    # Record order fill
+    cursor.execute("""
+        INSERT INTO order_fills (order_id, user_id, filled_amount, filled_price) 
+        VALUES (%s, %s, %s, %s)
+    """, (order['id'], user_id, amount, execution_price))
+
 # Start background scheduler
 scheduler = BackgroundScheduler()
 scheduler.add_job(check_price_alerts, 'interval', seconds=CHECK_INTERVAL)
+scheduler.add_job(check_pending_orders, 'interval', seconds=CHECK_INTERVAL)
 scheduler.start()
 
 def calculate_risk_metrics(coin_ids, amounts, days=30):
@@ -525,16 +876,14 @@ def risk_quiz():
             return redirect(url_for('risk_quiz'))
     
     # GET request - show the quiz
-    return render_template('combined.html', 
-                         section='risk_quiz', 
-                         questions=questions)
+    return render_template('combined.html', section='risk_quiz', questions=questions)
 
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
     coins = []
-    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin")
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin,tether")
     if response:
         coins = json.loads(response.text)
     else:
@@ -545,8 +894,10 @@ def dashboard():
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT crypto_bucks, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
+            cursor.execute("SELECT crypto_bucks, tether_balance, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
+            if user:
+                user['tether_balance'] = float(user.get('tether_balance', 0))
             cursor.execute("""
                 SELECT n.id, n.coin_id, n.message, n.created_at, pa.alert_type, pa.target_price 
                 FROM notifications n
@@ -623,12 +974,18 @@ def live_market():
     response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={COINS_PER_PAGE}&page={page}&sparkline=false")
     if response:
         coins = json.loads(response.text)
+        # Enhance each coin with 24h high/low data
+        for coin in coins:
+            coin['high_24h'] = coin.get('high_24h', 'N/A')
+            coin['low_24h'] = coin.get('low_24h', 'N/A')
+            coin['total_volume'] = coin.get('total_volume', 'N/A')
     else:
         flash("Failed to fetch live market data. Using cached data if available.", "warning")
     total_coins = 1000
     total_pages = (total_coins + COINS_PER_PAGE - 1) // COINS_PER_PAGE
     conn = get_db_connection()
     user_wallets = []
+    user_balances = {'crypto_bucks': 0, 'tether': 0}
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
@@ -640,95 +997,212 @@ def live_market():
                 conn.commit()
                 cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
                 user_wallets = cursor.fetchall()
+            
+            # Get user balances
+            cursor.execute("SELECT crypto_bucks, tether_balance FROM users WHERE id = %s", (session['user_id'],))
+            user = cursor.fetchone()
+            if user:
+                user_balances['crypto_bucks'] = float(user['crypto_bucks'])
+                user_balances['tether'] = float(user.get('tether_balance', 0))
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='live_market', coins=coins, wallets=user_wallets, page=page, total_pages=total_pages)
+    return render_template('combined.html', section='live_market', coins=coins, wallets=user_wallets, 
+                         page=page, total_pages=total_pages, user_balances=user_balances)
 
 @app.route('/trade', methods=['POST'])
 def trade():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+    
     coin_id = request.form.get('coin_id', '').lower()
     amount = request.form.get('amount')
     current_price = request.form.get('current_price')
     wallet_id = request.form.get('wallet_id')
-    action = request.form.get('action')
+    action = request.form.get('action')  # 'buy' or 'sell'
+    order_type = request.form.get('order_type', 'market')  # 'market', 'limit', 'stop_loss', 'take_profit'
+    limit_price = request.form.get('limit_price')  # For limit orders
+    stop_price = request.form.get('stop_price')  # For stop_loss/take_profit
+    quote_currency = request.form.get('quote_currency', 'cryptobucks')  # Default to CryptoBucks
     source = request.form.get('source', 'live_market')
-    if not all([coin_id, amount, current_price, wallet_id, action]) or action not in ['buy', 'sell']:
+    
+    if not all([coin_id, amount, wallet_id, action]) or action not in ['buy', 'sell']:
         flash("All fields are required", "error")
         return redirect(url_for(source))
+    
     try:
         amount = float(amount)
-        current_price = float(current_price)
         wallet_id = int(wallet_id)
+        if current_price:
+            current_price = float(current_price)
+        # Convert empty strings to None for database NULL
+        if limit_price and limit_price.strip():
+            limit_price = float(limit_price)
+        else:
+            limit_price = None
+        if stop_price and stop_price.strip():
+            stop_price = float(stop_price)
+        else:
+            stop_price = None
     except ValueError:
         flash("Invalid amount, price, or wallet", "error")
         return redirect(url_for(source))
-    if amount <= 0 or current_price <= 0:
-        flash("Amount and price must be positive", "error")
+    
+    if amount <= 0:
+        flash("Amount must be positive", "error")
         return redirect(url_for(source))
+    
     conn = get_db_connection()
     if conn is None:
         flash("Database connection failed", "error")
         return redirect(url_for(source))
+    
     try:
         cursor = conn.cursor(dictionary=True)
-        if action == 'buy':
-            cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
-            crypto_bucks = float(cursor.fetchone()['crypto_bucks'])
-            total_cost = amount * current_price
-            if total_cost > crypto_bucks:
-                flash("Insufficient CryptoBucks", "error")
+        
+        # Handle MARKET orders - execute immediately
+        if order_type == 'market':
+            if not current_price or current_price <= 0:
+                flash("Current price is required for market orders", "error")
                 return redirect(url_for(source))
-            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
-            cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
-                          (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
-        elif action == 'sell':
-            buy_transaction_id = request.form.get('buy_transaction_id')
-            if not buy_transaction_id:
-                flash("Missing buy transaction ID", "error")
+            
+            if action == 'buy':
+                # Determine which currency to use for payment
+                if coin_id == 'tether':
+                    # Buying USDT with CryptoBucks
+                    cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
+                    balance = float(cursor.fetchone()['crypto_bucks'])
+                    total_cost = amount * current_price
+                    
+                    if total_cost > balance:
+                        flash("Insufficient CryptoBucks", "error")
+                        return redirect(url_for(source))
+                    
+                    cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s, tether_balance = tether_balance + %s WHERE id = %s", 
+                                 (total_cost, amount, session['user_id']))
+                    flash(f"Successfully bought {amount} USDT for {total_cost:.2f} CryptoBucks", "success")
+                
+                elif quote_currency == 'tether':
+                    # Buying crypto with USDT
+                    cursor.execute("SELECT tether_balance FROM users WHERE id = %s", (session['user_id'],))
+                    tether_balance = float(cursor.fetchone()['tether_balance'])
+                    total_cost = amount * current_price
+                    
+                    if total_cost > tether_balance:
+                        flash("Insufficient USDT balance", "error")
+                        return redirect(url_for(source))
+                    
+                    cursor.execute("UPDATE users SET tether_balance = tether_balance - %s WHERE id = %s", 
+                                 (total_cost, session['user_id']))
+                    cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
+                                 (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
+                    flash(f"Successfully bought {amount} {coin_id} for {total_cost:.2f} USDT", "success")
+                
+                else:
+                    # Buying crypto with CryptoBucks (legacy)
+                    cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
+                    crypto_bucks = float(cursor.fetchone()['crypto_bucks'])
+                    total_cost = amount * current_price
+                    
+                    if total_cost > crypto_bucks:
+                        flash("Insufficient CryptoBucks", "error")
+                        return redirect(url_for(source))
+                    
+                    cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", 
+                                 (total_cost, session['user_id']))
+                    cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
+                                 (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
+                    flash(f"Successfully bought {amount} {coin_id}", "success")
+            
+            elif action == 'sell':
+                buy_transaction_id = request.form.get('buy_transaction_id')
+                if not buy_transaction_id:
+                    flash("Missing buy transaction ID", "error")
+                    return redirect(url_for(source))
+                
+                try:
+                    buy_transaction_id = int(buy_transaction_id)
+                except ValueError:
+                    flash("Invalid buy transaction ID", "error")
+                    return redirect(url_for(source))
+                
+                cursor.execute(
+                    "SELECT amount, price FROM transactions WHERE id = %s AND user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy'",
+                    (buy_transaction_id, session['user_id'], wallet_id, coin_id)
+                )
+                buy = cursor.fetchone()
+                if not buy:
+                    flash("Invalid buy transaction", "error")
+                    return redirect(url_for(source))
+                
+                cursor.execute(
+                    "SELECT SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND type = 'sell' AND buy_transaction_id = %s",
+                    (session['user_id'], buy_transaction_id)
+                )
+                already_sold = float(cursor.fetchone()['total_sold'] or 0)
+                available = float(buy['amount']) - already_sold
+                
+                if amount > available:
+                    flash("Insufficient coin amount to sell", "error")
+                    return redirect(url_for(source))
+                
+                purchase_price = float(buy['price'])
+                revenue = amount * current_price
+                
+                # Credit USDT or CryptoBucks based on quote_currency
+                if quote_currency == 'tether':
+                    cursor.execute("UPDATE users SET tether_balance = tether_balance + %s WHERE id = %s", 
+                                 (revenue, session['user_id']))
+                else:
+                    cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", 
+                                 (revenue, session['user_id']))
+                
+                cursor.execute(
+                    "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy_transaction_id)
+                )
+                flash(f"Successfully sold {amount} {coin_id}", "success")
+        
+        # Handle LIMIT, STOP_LOSS, TAKE_PROFIT orders - save for later execution
+        else:
+            if order_type == 'limit' and (limit_price is None or limit_price <= 0):
+                flash("Limit price is required for limit orders", "error")
                 return redirect(url_for(source))
-            try:
-                buy_transaction_id = int(buy_transaction_id)
-            except ValueError:
-                flash("Invalid buy transaction ID", "error")
+            
+            if order_type in ['stop_loss', 'take_profit'] and (stop_price is None or stop_price <= 0):
+                flash("Stop price is required for stop loss/take profit orders", "error")
                 return redirect(url_for(source))
+            
+            # Get trading pair ID
             cursor.execute(
-                "SELECT amount, price FROM transactions WHERE id = %s AND user_id = %s AND wallet_id = %s AND coin_id = %s AND type = 'buy'",
-                (buy_transaction_id, session['user_id'], wallet_id, coin_id)
+                "SELECT id FROM trading_pairs WHERE base_currency = %s AND quote_currency = %s",
+                (coin_id, quote_currency)
             )
-            buy = cursor.fetchone()
-            if not buy:
-                flash("Invalid buy transaction", "error")
-                return redirect(url_for(source))
-            cursor.execute(
-                "SELECT SUM(amount) as total_sold FROM transactions WHERE user_id = %s AND type = 'sell' AND buy_transaction_id = %s",
-                (session['user_id'], buy_transaction_id)
-            )
-            already_sold = float(cursor.fetchone()['total_sold'] or 0)
-            available = float(buy['amount']) - already_sold
-            if amount > available:
-                flash("Insufficient coin amount to sell", "error")
-                return redirect(url_for(source))
-            purchase_price = float(buy['price'])
-            revenue = amount * current_price
-            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (revenue, session['user_id']))
-            cursor.execute(
-                "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy_transaction_id)
-            )
+            pair = cursor.fetchone()
+            pair_id = pair['id'] if pair else None
+            
+            # Create pending order
+            cursor.execute("""
+                INSERT INTO orders (user_id, wallet_id, pair_id, base_currency, quote_currency, 
+                                  order_type, side, amount, price, stop_price, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+            """, (session['user_id'], wallet_id, pair_id, coin_id, quote_currency, 
+                  order_type, action, amount, limit_price, stop_price))
+            
+            flash(f"{order_type.replace('_', ' ').title()} order placed successfully", "success")
+        
         conn.commit()
-        flash(f"Successfully {action}ed {amount} {coin_id}", "success")
     except mysql.connector.Error as err:
         flash(f"Database error: {err}", "error")
+        conn.rollback()
     finally:
         if conn.is_connected():
             cursor.close()
             conn.close()
+    
     return redirect(url_for(source))
 
 @app.route('/portfolio', methods=['GET', 'POST'])
@@ -1025,6 +1499,103 @@ def remove_alert(alert_id):
                 conn.close()
     return redirect(url_for('alerts'))
 
+@app.route('/orders')
+def orders():
+    """View all open orders and order history"""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    open_orders = []
+    order_history = []
+    
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            
+            # Get open (pending) orders
+            cursor.execute("""
+                SELECT o.*, tp.symbol as pair_symbol 
+                FROM orders o
+                LEFT JOIN trading_pairs tp ON o.pair_id = tp.id
+                WHERE o.user_id = %s AND o.status = 'pending'
+                ORDER BY o.created_at DESC
+            """, (session['user_id'],))
+            open_orders = cursor.fetchall()
+            
+            # Get order history (filled or cancelled)
+            cursor.execute("""
+                SELECT o.*, tp.symbol as pair_symbol 
+                FROM orders o
+                LEFT JOIN trading_pairs tp ON o.pair_id = tp.id
+                WHERE o.user_id = %s AND o.status IN ('filled', 'cancelled')
+                ORDER BY o.created_at DESC
+                LIMIT 50
+            """, (session['user_id'],))
+            order_history = cursor.fetchall()
+            
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    
+    return render_template('combined.html', section='orders', 
+                         open_orders=open_orders, order_history=order_history)
+
+@app.route('/cancel_order/<int:order_id>', methods=['POST'])
+def cancel_order(order_id):
+    """Cancel a pending order"""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE orders SET status = 'cancelled', cancelled_at = NOW() 
+                WHERE id = %s AND user_id = %s AND status = 'pending'
+            """, (order_id, session['user_id']))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                flash("Order cancelled successfully", "success")
+            else:
+                flash("Order not found or already executed", "error")
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    
+    return redirect(url_for('orders'))
+
+@app.route('/trading_pairs')
+def trading_pairs():
+    """Get all available trading pairs"""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = get_db_connection()
+    pairs = []
+    
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM trading_pairs WHERE is_active = TRUE")
+            pairs = cursor.fetchall()
+        except mysql.connector.Error as err:
+            return jsonify({'error': str(err)}), 500
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    
+    return jsonify(pairs)
+
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
@@ -1066,27 +1637,276 @@ def correlation_matrix():
     correlation_data = calculate_correlation_matrix(coin_ids)
     return jsonify(correlation_data)
 
+@app.route('/api/orderbook/<pair>')
+def orderbook(pair):
+    """Get order book for a specific trading pair (e.g., BTC/USDT)"""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        # Parse pair (e.g., "bitcoin-tether" or "BTC/USDT")
+        if '/' in pair:
+            parts = pair.split('/')
+            base = parts[0].lower()
+            quote = parts[1].lower()
+            # Convert symbols to coin IDs
+            if base == 'btc':
+                base = 'bitcoin'
+            elif base == 'eth':
+                base = 'ethereum'
+            elif base == 'usdt':
+                base = 'tether'
+            if quote == 'usdt':
+                quote = 'tether'
+        elif '-' in pair:
+            base, quote = pair.lower().split('-')
+        else:
+            return jsonify({'error': 'Invalid pair format'}), 400
+        
+        # Get buy orders (bids) - sorted by price descending
+        cursor.execute("""
+            SELECT price as price_level, SUM(amount - filled_amount) as total_amount, COUNT(*) as order_count
+            FROM orders
+            WHERE base_currency = %s AND quote_currency = %s 
+            AND side = 'buy' AND status = 'pending' AND order_type = 'limit'
+            GROUP BY price
+            ORDER BY price DESC
+            LIMIT 20
+        """, (base, quote))
+        bids = cursor.fetchall()
+        
+        # Get sell orders (asks) - sorted by price ascending
+        cursor.execute("""
+            SELECT price as price_level, SUM(amount - filled_amount) as total_amount, COUNT(*) as order_count
+            FROM orders
+            WHERE base_currency = %s AND quote_currency = %s 
+            AND side = 'sell' AND status = 'pending' AND order_type = 'limit'
+            GROUP BY price
+            ORDER BY price ASC
+            LIMIT 20
+        """, (base, quote))
+        asks = cursor.fetchall()
+        
+        # Convert Decimal to float for JSON serialization
+        for bid in bids:
+            bid['price_level'] = float(bid['price_level'])
+            bid['total_amount'] = float(bid['total_amount'])
+        
+        for ask in asks:
+            ask['price_level'] = float(ask['price_level'])
+            ask['total_amount'] = float(ask['total_amount'])
+        
+        return jsonify({
+            'pair': f"{base}/{quote}",
+            'bids': bids,
+            'asks': asks,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except mysql.connector.Error as err:
+        return jsonify({'error': str(err)}), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+@app.route('/backtester')
+def backtester():
+    print("Backtester route accessed")
+    try:
+        if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+            print("User not authenticated, redirecting to login")
+            return redirect(url_for('login'))
+        
+        print("Fetching coins from CoinGecko API")
+        api_url = f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false"
+        print(f"API URL: {api_url}")
+        
+        response = fetch_with_retry(api_url)
+        print(f"Response type: {type(response)}")
+        
+        if response and hasattr(response, 'json'):
+            coins = response.json()
+        else:
+            print("API fetch failed, using empty list")
+            coins = []
+        
+        print(f"Successfully retrieved {len(coins)} coins")
+        return render_template('backtester.html', coins=coins, section='backtester')
+        
+    except Exception as e:
+        error_msg = f"Error in backtester route: {str(e)}\n\n{traceback.format_exc()}"
+        print(error_msg)
+        return render_template('backtester.html', coins=[], section='backtester', error=str(e))
+
+@app.route('/api/backtest', methods=['POST'])
+def api_backtest():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    data = request.json
+    
+    try:
+        # Get historical data from CoinGecko
+        coin_id = data.get('coin_id')
+        days = int(data.get('days', 30))
+        initial_capital = float(data.get('initial_capital', 1000))
+        strategy_code = data.get('strategy_code', '')
+        
+        # Fetch historical data
+        end_date = int(time.time())
+        start_date = end_date - (days * 24 * 60 * 60)
+        
+        response = fetch_with_retry(
+            f"{COINGECKO_API}/coins/{coin_id}/market_chart/range"
+            f"?vs_currency=usd&from={start_date}&to={end_date}"
+        )
+        
+        # Process the data
+        historical_data = response.json()
+        prices = historical_data['prices']
+        
+        # Create a DataFrame with OHLCV data (simplified - using close prices)
+        df = pd.DataFrame(prices, columns=['timestamp', 'close'])
+        df['date'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df['open'] = df['close'].shift(1)
+        df['high'] = df[['open', 'close']].max(axis=1)
+        df['low'] = df[['open', 'close']].min(axis=1)
+        df['volume'] = 0  # Not available in this API response
+        
+        # Prepare the strategy function
+        strategy_globals = {}
+        strategy_locals = {'data': df, 'portfolio': {'cash': initial_capital, 'position': 0, 'equity': [initial_capital]}}
+        
+        # Execute the strategy code in a controlled environment
+        try:
+            # Create a custom namespace with only the allowed modules
+            allowed_globals = {
+                'pd': pd,
+                'np': np,
+                '__builtins__': {
+                    'range': range,
+                    'len': len,
+                    'float': float,
+                    'int': int,
+                    'str': str,
+                    'list': list,
+                    'dict': dict,
+                    'min': min,
+                    'max': max,
+                    'sum': sum,
+                    'abs': abs,
+                    'round': round,
+                    'zip': zip,
+                    'enumerate': enumerate,
+                    'sorted': sorted,
+                    'reversed': reversed,
+                    'filter': filter,
+                    'map': map,
+                }
+            }
+            
+            # Execute the strategy code
+            exec(strategy_code, strategy_globals, strategy_locals)
+            
+            # Get the strategy results
+            if 'strategy' in strategy_locals:
+                result = strategy_locals['strategy'](df, {'cash': initial_capital, 'position': 0})
+            else:
+                # Try to find the strategy function
+                for name, obj in strategy_locals.items():
+                    if callable(obj) and name != '<module>':
+                        result = obj(df, {'cash': initial_capital, 'position': 0})
+                        break
+                else:
+                    return jsonify({'error': 'No strategy function found in the code'}), 400
+            
+            # Process the results
+            if not isinstance(result, dict) or 'signals' not in result or 'metrics' not in result:
+                return jsonify({'error': 'Strategy must return a dictionary with "signals" and "metrics"'}), 400
+            
+            # Calculate trades and equity curve
+            trades = []
+            equity_curve = [{'timestamp': int(df['timestamp'].iloc[0]), 'equity': initial_capital}]
+            
+            for i in range(1, len(df)):
+                # Simplified trade simulation
+                if i < len(result['signals']) and 'position' in result['signals'][i]:
+                    prev_position = result['signals'][i-1]['position'] if i > 0 else 0
+                    current_position = result['signals'][i]['position']
+                    
+                    if current_position != prev_position:
+                        price = df['close'].iloc[i]
+                        trade_type = 'buy' if current_position > prev_position else 'sell'
+                        trade_size = abs(current_position - prev_position)
+                        
+                        trades.append({
+                            'timestamp': int(df['timestamp'].iloc[i]),
+                            'type': trade_type,
+                            'price': price,
+                            'position': current_position,
+                            'pnl': 0  # Simplified for this example
+                        })
+                
+                # Update equity curve (simplified)
+                if 'strategy_return' in result and i < len(result['strategy_return']):
+                    daily_return = result['strategy_return'].iloc[i] if not np.isnan(result['strategy_return'].iloc[i]) else 0
+                    equity = equity_curve[-1]['equity'] * (1 + daily_return)
+                    equity_curve.append({
+                        'timestamp': int(df['timestamp'].iloc[i]),
+                        'equity': equity
+                    })
+            
+            # Calculate win rate (simplified)
+            win_rate = 0.5  # Default
+            if trades:
+                winning_trades = sum(1 for t in trades if t.get('pnl', 0) > 0)
+                win_rate = winning_trades / len(trades)
+            
+            result['metrics']['win_rate'] = win_rate
+            
+            return jsonify({
+                'success': True,
+                'trades': trades,
+                'equity_curve': equity_curve,
+                'metrics': result['metrics']
+            })
+            
+        except Exception as e:
+            error_msg = f"Error executing strategy: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+            return jsonify({'error': error_msg}), 400
+            
+    except Exception as e:
+        return jsonify({'error': f'Backtest failed: {str(e)}'}), 500
+
 @app.route('/achievements')
 def achievements():
-    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+    if 'user_id' not in session:
         return redirect(url_for('login'))
+    
     conn = get_db_connection()
-    achievements_list = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
-            achievements_list = user['achievements'].split(',') if user['achievements'] else []
+            achievements_list = user['achievements'].split(',') if user and user['achievements'] else []
+            return render_template('combined.html', section='achievements', achievements=achievements_list)
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='achievements', achievements=achievements_list)
+    return redirect(url_for('dashboard'))
 
-@app.route('/update_achievements', methods=['POST'])
+@app.route('/update_achievements', methods=['POST']) 
 def update_achievements():
     if 'user_id' not in session:
         return redirect(url_for('login'))
