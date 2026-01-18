@@ -580,6 +580,12 @@
             font-weight: 700;
             color: var(--text-primary);
         }
+        
+        .stat-subtext {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
 
         .stat-icon {
             position: absolute;
@@ -774,6 +780,17 @@
         .empty-state p {
             font-size: 14px;
             color: var(--text-muted);
+        }
+        
+        /* Quick Action Cards */
+        .card {
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
         }
 
         /* Responsive */
@@ -1835,7 +1852,12 @@
             </nav>
             
             <div class="dashboard-card">
-                <h3><i class="fas fa-list-ul"></i>My Trading Orders</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3><i class="fas fa-list-ul"></i>My Trading Orders</h3>
+                    <a href="{{ url_for('check_orders_now') }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-sync-alt"></i> Check Orders Now
+                    </a>
+                </div>
                 
                 <!-- Open Orders -->
                 <div class="mb-4">
@@ -1978,6 +2000,38 @@
                 </div>
             </nav>
             
+            <!-- Portfolio Summary -->
+            <div class="dashboard-card">
+                <h3><i class="fas fa-chart-pie"></i>Portfolio Summary</h3>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Realized Profit/Loss</div>
+                            <div class="stat-value {% if total_profit >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                {% if total_profit >= 0 %}+{% endif %}${{ total_profit | round(2) }}
+                            </div>
+                            <small class="text-muted">From completed sells</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Unrealized Profit/Loss</div>
+                            <div class="stat-value {% if total_unrealized_profit >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                {% if total_unrealized_profit >= 0 %}+{% endif %}${{ total_unrealized_profit | round(2) }}
+                            </div>
+                            <small class="text-muted">Current holdings value change</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Trading Fees Paid</div>
+                            <div class="stat-value" style="color: #ef4444;">-${{ total_fees_paid | round(2) }}</div>
+                            <small class="text-muted">0.1% fee per trade</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="dashboard-card">
                 <h3><i class="fas fa-plus-circle"></i>Add to Portfolio</h3>
                 <form method="POST" action="{{ url_for('portfolio') }}">
@@ -2010,24 +2064,167 @@
                 </form>
             </div>
             
+            <!-- Tabbed Portfolio Sections -->
             <div class="dashboard-card">
-                <h3><i class="fas fa-wallet"></i>Your Holdings</h3>
-                <div class="table-wrapper">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Wallet</th>
-                                <th>Coin</th>
-                                <th>Amount</th>
-                                <th>Purchase Price</th>
-                                <th>Current Price</th>
-                                <th>Profit/Loss</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if transactions %}
-                                {% for transaction in transactions %}
+                <ul class="nav nav-tabs mb-3" id="portfolioTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="holdings-tab" data-bs-toggle="tab" data-bs-target="#holdings" type="button">
+                            <i class="fas fa-coins"></i> Holdings (Avg Price)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button">
+                            <i class="fas fa-history"></i> Trade History
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button">
+                            <i class="fas fa-list"></i> Transaction Details
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="portfolioTabsContent">
+                    <!-- Holdings Tab -->
+                    <div class="tab-pane fade show active" id="holdings" role="tabpanel">
+                        <div class="table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Coin</th>
+                                        <th>Total Amount</th>
+                                        <th>Average Buy Price</th>
+                                        <th>Current Price</th>
+                                        <th>Unrealized P/L</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if grouped_holdings %}
+                                        {% for coin_id, holding in grouped_holdings.items() %}
+                                            <tr>
+                                                <td><strong>{{ coin_id.upper() }}</strong></td>
+                                                <td>{{ holding.total_amount | round(8) }}</td>
+                                                <td>${{ holding.avg_buy_price | round(2) }}</td>
+                                                <td><strong>${{ holding.current_price | round(2) }}</strong></td>
+                                                <td class="{% if holding.unrealized_profit >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                                    {% if holding.unrealized_profit >= 0 %}
+                                                        <i class="fas fa-arrow-up"></i>
+                                                    {% else %}
+                                                        <i class="fas fa-arrow-down"></i>
+                                                    {% endif %}
+                                                    {% if holding.unrealized_profit >= 0 %}+{% endif %}${{ holding.unrealized_profit | round(2) }}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="5" class="text-center">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-coins"></i>
+                                                    <h4>No Holdings</h4>
+                                                    <p>Start buying crypto to see your holdings</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Trade History Tab -->
+                    <div class="tab-pane fade" id="history" role="tabpanel">
+                        <div class="table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Type</th>
+                                        <th>Coin</th>
+                                        <th>Amount</th>
+                                        <th>Price</th>
+                                        <th>Total Value</th>
+                                        <th>Fee (0.1%)</th>
+                                        <th>Profit/Loss</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if all_transactions %}
+                                        {% for transaction in all_transactions %}
+                                            <tr>
+                                                <td>{{ transaction.formatted_date }}</td>
+                                                <td>
+                                                    {% if transaction.type == 'buy' %}
+                                                        <span class="badge bg-success">BUY</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">SELL</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td><strong>{{ transaction.coin_id.upper() }}</strong></td>
+                                                <td>{{ transaction.amount | round(8) }}</td>
+                                                <td>
+                                                    {% if transaction.type == 'buy' %}
+                                                        ${{ transaction.price | round(2) }}
+                                                    {% else %}
+                                                        ${{ transaction.sold_price | round(2) }}
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if transaction.type == 'buy' %}
+                                                        ${{ (transaction.amount * transaction.price) | round(2) }}
+                                                    {% else %}
+                                                        ${{ (transaction.amount * transaction.sold_price) | round(2) }}
+                                                    {% endif %}
+                                                </td>
+                                                <td style="color: #ef4444;">-${{ transaction.fee | round(2) }}</td>
+                                                <td>
+                                                    {% if transaction.type == 'sell' %}
+                                                        {% set profit = (transaction.sold_price - transaction.price) * transaction.amount %}
+                                                        {% set net_profit = profit - transaction.fee %}
+                                                        <span class="{% if net_profit >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                                            {% if net_profit >= 0 %}+{% endif %}${{ net_profit | round(2) }}
+                                                        </span>
+                                                        <small class="text-muted d-block">(Gross: ${{ profit | round(2) }})</small>
+                                                    {% else %}
+                                                        -
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="8" class="text-center">
+                                                <div class="empty-state">
+                                                    <i class="fas fa-history"></i>
+                                                    <h4>No Trade History</h4>
+                                                    <p>Your buy/sell transactions will appear here</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Transaction Details Tab -->
+                    <div class="tab-pane fade" id="details" role="tabpanel">
+                        <div class="table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Wallet</th>
+                                        <th>Coin</th>
+                                        <th>Amount</th>
+                                        <th>Purchase Price</th>
+                                        <th>Current Price</th>
+                                        <th>Profit/Loss</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if transactions %}
+                                        {% for transaction in transactions %}
                                     <tr>
                                         <td><strong>Wallet {{ transaction.wallet_id }}</strong></td>
                                         <td><strong>{{ transaction.coin_id.upper() }}</strong></td>
@@ -2073,6 +2270,8 @@
                             {% endif %}
                         </tbody>
                     </table>
+                        </div>
+                    </div>
                 </div>
             </div>
             

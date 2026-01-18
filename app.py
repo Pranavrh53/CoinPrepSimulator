@@ -432,13 +432,15 @@ def check_pending_orders():
             if should_execute:
                 try:
                     # Execute the order
+                    print(f"Attempting to execute {order_type} {side} order #{order['id']}: {order['amount']} {base_currency} @ ${current_price} (target: {order.get('price') or order.get('stop_price')})")
                     execute_order(cursor, conn, order, current_price)
-                    print(f"Executed {order_type} order #{order['id']} for {order['amount']} {base_currency} at ${current_price}")
+                    conn.commit()  # Commit after each successful execution
+                    print(f"✅ Successfully executed {order_type} order #{order['id']} for {order['amount']} {base_currency} at ${current_price}")
                 except Exception as e:
-                    print(f"Error executing order #{order['id']}: {e}")
+                    print(f"❌ Error executing order #{order['id']}: {e}")
+                    import traceback
+                    traceback.print_exc()
                     conn.rollback()
-        
-        conn.commit()
     except mysql.connector.Error as err:
         print(f"Database error in pending orders check: {err}")
     finally:
@@ -455,6 +457,8 @@ def execute_order(cursor, conn, order, execution_price):
     side = order['side']
     amount = float(order['amount'])
     
+    print(f"Executing {side} order: {amount} {base_currency} with {quote_currency} @ ${execution_price}")
+    
     if side == 'buy':
         # Buy: Deduct quote currency, add base currency to portfolio
         if quote_currency == 'tether':
@@ -465,18 +469,53 @@ def execute_order(cursor, conn, order, execution_price):
             
             tether_balance = float(user['tether_balance'])
             total_cost = amount * execution_price
+            trading_fee = total_cost * 0.001  # 0.1% fee
+            total_with_fee = total_cost + trading_fee
             
-            if total_cost > tether_balance:
+            print(f"USDT balance: ${tether_balance}, Cost: ${total_cost}, Fee: ${trading_fee:.2f}, Total: ${total_with_fee:.2f}")
+            
+            if total_with_fee > tether_balance:
                 # Cancel order if insufficient balance
+                print(f"Insufficient USDT balance. Cancelling order #{order['id']}")
                 cursor.execute("UPDATE orders SET status = 'cancelled', cancelled_at = NOW() WHERE id = %s", (order['id'],))
+                conn.commit()
                 return
             
             # Deduct USDT and record transaction
-            cursor.execute("UPDATE users SET tether_balance = tether_balance - %s WHERE id = %s", (total_cost, user_id))
+            cursor.execute("UPDATE users SET tether_balance = tether_balance - %s WHERE id = %s", (total_with_fee, user_id))
             cursor.execute("""
                 INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) 
                 VALUES (%s, %s, %s, %s, %s, 'buy')
             """, (user_id, wallet_id, base_currency, amount, execution_price))
+            print(f"Buy transaction recorded. Deducted ${total_cost} USDT")
+            
+        elif quote_currency == 'cryptobucks':
+            cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (user_id,))
+            user = cursor.fetchone()
+            if not user:
+                raise Exception("User not found")
+            
+            crypto_bucks = float(user['crypto_bucks'])
+            total_cost = amount * execution_price
+            trading_fee = total_cost * 0.001  # 0.1% fee
+            total_with_fee = total_cost + trading_fee
+            
+            print(f"CryptoBucks balance: ${crypto_bucks}, Cost: ${total_cost}, Fee: ${trading_fee:.2f}, Total: ${total_with_fee:.2f}")
+            
+            if total_with_fee > crypto_bucks:
+                # Cancel order if insufficient balance
+                print(f"Insufficient CryptoBucks. Cancelling order #{order['id']}")
+                cursor.execute("UPDATE orders SET status = 'cancelled', cancelled_at = NOW() WHERE id = %s", (order['id'],))
+                conn.commit()
+                return
+            
+            # Deduct CryptoBucks and record transaction
+            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_with_fee, user_id))
+            cursor.execute("""
+                INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) 
+                VALUES (%s, %s, %s, %s, %s, 'buy')
+            """, (user_id, wallet_id, base_currency, amount, execution_price))
+            print(f"Buy transaction recorded. Deducted ${total_cost} CryptoBucks")
     
     elif side == 'sell':
         # Sell: Check if user has the coins, add quote currency
@@ -500,6 +539,7 @@ def execute_order(cursor, conn, order, execution_price):
         
         available_amount = 0
         buy_transaction_id = None
+        purchase_price = None
         
         for buy in buy_transactions:
             buy_id = buy['id']
@@ -509,25 +549,34 @@ def execute_order(cursor, conn, order, execution_price):
             
             if remaining >= amount:
                 buy_transaction_id = buy_id
+                purchase_price = float(buy['price'])
                 available_amount = remaining
                 break
         
         if buy_transaction_id is None or available_amount < amount:
             # Cancel order if insufficient coins
+            print(f"Insufficient {base_currency} to sell. Available: {available_amount}, Needed: {amount}")
             cursor.execute("UPDATE orders SET status = 'cancelled', cancelled_at = NOW() WHERE id = %s", (order['id'],))
+            conn.commit()
             return
         
         # Execute sell
-        purchase_price = float(buy['price'])
         revenue = amount * execution_price
+        trading_fee = revenue * 0.001  # 0.1% fee
+        net_revenue = revenue - trading_fee
+        
+        print(f"Selling {amount} {base_currency} for ${revenue:.2f}, Fee: ${trading_fee:.2f}, Net: ${net_revenue:.2f}")
         
         if quote_currency == 'tether':
-            cursor.execute("UPDATE users SET tether_balance = tether_balance + %s WHERE id = %s", (revenue, user_id))
+            cursor.execute("UPDATE users SET tether_balance = tether_balance + %s WHERE id = %s", (net_revenue, user_id))
+        elif quote_currency == 'cryptobucks':
+            cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", (net_revenue, user_id))
         
         cursor.execute("""
             INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) 
             VALUES (%s, %s, %s, %s, %s, 'sell', %s, %s)
         """, (user_id, wallet_id, base_currency, amount, purchase_price, execution_price, buy_transaction_id))
+        print(f"Sell transaction recorded. Added ${revenue} to balance")
     
     # Mark order as filled
     cursor.execute("""
@@ -540,6 +589,8 @@ def execute_order(cursor, conn, order, execution_price):
         INSERT INTO order_fills (order_id, user_id, filled_amount, filled_price) 
         VALUES (%s, %s, %s, %s)
     """, (order['id'], user_id, amount, execution_price))
+    
+    print(f"Order #{order['id']} marked as filled")
 
 # Start background scheduler
 scheduler = BackgroundScheduler()
@@ -1076,46 +1127,52 @@ def trade():
                     cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
                     balance = float(cursor.fetchone()['crypto_bucks'])
                     total_cost = amount * current_price
+                    trading_fee = total_cost * 0.001  # 0.1% fee
+                    total_with_fee = total_cost + trading_fee
                     
-                    if total_cost > balance:
-                        flash("Insufficient CryptoBucks", "error")
+                    if total_with_fee > balance:
+                        flash(f"Insufficient CryptoBucks. Need ${total_with_fee:.2f} (includes ${trading_fee:.2f} fee)", "error")
                         return redirect(url_for(source))
                     
                     cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s, tether_balance = tether_balance + %s WHERE id = %s", 
-                                 (total_cost, amount, session['user_id']))
-                    flash(f"Successfully bought {amount} USDT for {total_cost:.2f} CryptoBucks", "success")
+                                 (total_with_fee, amount, session['user_id']))
+                    flash(f"Successfully bought {amount} USDT (Fee: ${trading_fee:.2f})", "success")
                 
                 elif quote_currency == 'tether':
                     # Buying crypto with USDT
                     cursor.execute("SELECT tether_balance FROM users WHERE id = %s", (session['user_id'],))
                     tether_balance = float(cursor.fetchone()['tether_balance'])
                     total_cost = amount * current_price
+                    trading_fee = total_cost * 0.001  # 0.1% fee
+                    total_with_fee = total_cost + trading_fee
                     
-                    if total_cost > tether_balance:
-                        flash("Insufficient USDT balance", "error")
+                    if total_with_fee > tether_balance:
+                        flash(f"Insufficient USDT. Need ${total_with_fee:.2f} (includes ${trading_fee:.2f} fee)", "error")
                         return redirect(url_for(source))
                     
                     cursor.execute("UPDATE users SET tether_balance = tether_balance - %s WHERE id = %s", 
-                                 (total_cost, session['user_id']))
+                                 (total_with_fee, session['user_id']))
                     cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
                                  (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
-                    flash(f"Successfully bought {amount} {coin_id} for {total_cost:.2f} USDT", "success")
+                    flash(f"Successfully bought {amount} {coin_id} (Fee: ${trading_fee:.2f})", "success")
                 
                 else:
                     # Buying crypto with CryptoBucks (legacy)
                     cursor.execute("SELECT crypto_bucks FROM users WHERE id = %s", (session['user_id'],))
                     crypto_bucks = float(cursor.fetchone()['crypto_bucks'])
                     total_cost = amount * current_price
+                    trading_fee = total_cost * 0.001  # 0.1% fee
+                    total_with_fee = total_cost + trading_fee
                     
-                    if total_cost > crypto_bucks:
-                        flash("Insufficient CryptoBucks", "error")
+                    if total_with_fee > crypto_bucks:
+                        flash(f"Insufficient CryptoBucks. Need ${total_with_fee:.2f} (includes ${trading_fee:.2f} fee)", "error")
                         return redirect(url_for(source))
                     
                     cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", 
-                                 (total_cost, session['user_id']))
+                                 (total_with_fee, session['user_id']))
                     cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
                                  (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
-                    flash(f"Successfully bought {amount} {coin_id}", "success")
+                    flash(f"Successfully bought {amount} {coin_id} (Fee: ${trading_fee:.2f})", "success")
             
             elif action == 'sell':
                 buy_transaction_id = request.form.get('buy_transaction_id')
@@ -1151,20 +1208,24 @@ def trade():
                 
                 purchase_price = float(buy['price'])
                 revenue = amount * current_price
+                trading_fee = revenue * 0.001  # 0.1% fee
+                net_revenue = revenue - trading_fee
                 
                 # Credit USDT or CryptoBucks based on quote_currency
                 if quote_currency == 'tether':
                     cursor.execute("UPDATE users SET tether_balance = tether_balance + %s WHERE id = %s", 
-                                 (revenue, session['user_id']))
+                                 (net_revenue, session['user_id']))
                 else:
                     cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks + %s WHERE id = %s", 
-                                 (revenue, session['user_id']))
+                                 (net_revenue, session['user_id']))
                 
                 cursor.execute(
                     "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                     (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy_transaction_id)
                 )
-                flash(f"Successfully sold {amount} {coin_id}", "success")
+                profit = (current_price - purchase_price) * amount
+                net_profit = profit - trading_fee
+                flash(f"Successfully sold {amount} {coin_id} (Profit: ${profit:.2f}, Fee: ${trading_fee:.2f}, Net: ${net_profit:.2f})", "success")
         
         # Handle LIMIT, STOP_LOSS, TAKE_PROFIT orders - save for later execution
         else:
@@ -1251,16 +1312,37 @@ def portfolio():
                     conn.close()
     conn = get_db_connection()
     sold_transactions = []
+    all_transactions = []
     total_profit = 0.0
+    total_unrealized_profit = 0.0
     current_prices = {}
     risk_metrics = {}
     transactions = []
+    grouped_holdings = {}
     user_wallets = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT id, name FROM wallets WHERE user_id = %s", (session['user_id'],))
             user_wallets = cursor.fetchall()
+            
+            # Get all transactions for trade history
+            cursor.execute("SELECT * FROM transactions WHERE user_id = %s ORDER BY id DESC", (session['user_id'],))
+            all_transactions = cursor.fetchall()
+            
+            # Process all transactions to ensure proper data types
+            for transaction in all_transactions:
+                transaction['price'] = float(transaction['price'] or 0)
+                transaction['sold_price'] = float(transaction.get('sold_price') or 0)
+                transaction['amount'] = float(transaction['amount'] or 0)
+                transaction['formatted_date'] = f"Transaction #{transaction['id']}"  # Fallback since no created_at column
+                
+                # Calculate fee for each transaction
+                if transaction['type'] == 'buy':
+                    transaction['fee'] = transaction['amount'] * transaction['price'] * 0.001
+                else:
+                    transaction['fee'] = transaction['amount'] * transaction['sold_price'] * 0.001
+            
             cursor.execute("SELECT * FROM transactions WHERE user_id = %s AND type = 'sell'", (session['user_id'],))
             sold_transactions = cursor.fetchall()
             for transaction in sold_transactions:
@@ -1278,19 +1360,34 @@ def portfolio():
                           (session['user_id'],))
             for row in cursor.fetchall():
                 sold_amounts[row['buy_transaction_id']] = float(row['total_sold'])
+            
+            # Build individual transactions and group by coin for average price
             for buy in buy_transactions:
                 buy_id = buy['id']
                 total_bought = float(buy['amount'] or 0)
                 total_sold = sold_amounts.get(buy_id, 0.0)
                 remaining_amount = total_bought - total_sold
                 if remaining_amount > 0:
+                    coin_id = buy['coin_id']
+                    price = float(buy['price'] or 0)
+                    
                     transactions.append({
                         'wallet_id': buy['wallet_id'],
-                        'coin_id': buy['coin_id'],
+                        'coin_id': coin_id,
                         'amount': remaining_amount,
-                        'price': float(buy['price'] or 0),
+                        'price': price,
                         'buy_transaction_id': buy_id
                     })
+                    
+                    # Group by coin for average buy price calculation
+                    if coin_id not in grouped_holdings:
+                        grouped_holdings[coin_id] = {
+                            'coin_id': coin_id,
+                            'total_amount': 0,
+                            'total_cost': 0
+                        }
+                    grouped_holdings[coin_id]['total_amount'] += remaining_amount
+                    grouped_holdings[coin_id]['total_cost'] += remaining_amount * price
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
@@ -1315,7 +1412,36 @@ def portfolio():
             current_prices = {coin['id']: float(coin['current_price']) for coin in cached_data if 'current_price' in coin}
         else:
             current_prices = {coin_id: 0.0 for coin_id in coin_ids}
-    return render_template('combined.html', section='portfolio', transactions=transactions, sold_transactions=sold_transactions, total_profit=round(total_profit, 2), current_prices=current_prices, wallets=user_wallets, risk_metrics=risk_metrics, correlation_data=correlation_data)
+    
+    # Calculate average buy price and unrealized P/L for grouped holdings
+    total_fees_paid = sum(t['fee'] for t in all_transactions)
+    
+    for coin_id, holding in grouped_holdings.items():
+        if holding['total_amount'] > 0:
+            holding['avg_buy_price'] = holding['total_cost'] / holding['total_amount']
+        else:
+            holding['avg_buy_price'] = 0
+        
+        current_price = current_prices.get(coin_id, 0)
+        holding['current_price'] = current_price
+        current_value = holding['total_amount'] * current_price
+        unrealized_profit = current_value - holding['total_cost']
+        holding['unrealized_profit'] = unrealized_profit
+        total_unrealized_profit += unrealized_profit
+    
+    return render_template('combined.html', 
+                         section='portfolio', 
+                         transactions=transactions,
+                         grouped_holdings=grouped_holdings,
+                         all_transactions=all_transactions,
+                         sold_transactions=sold_transactions, 
+                         total_profit=round(total_profit, 2),
+                         total_unrealized_profit=round(total_unrealized_profit, 2),
+                         total_fees_paid=round(total_fees_paid, 2),
+                         current_prices=current_prices, 
+                         wallets=user_wallets, 
+                         risk_metrics=risk_metrics, 
+                         correlation_data=correlation_data)
 
 @app.route('/watchlist', methods=['GET', 'POST'])
 def watchlist():
@@ -1571,6 +1697,17 @@ def cancel_order(order_id):
                 cursor.close()
                 conn.close()
     
+    return redirect(url_for('orders'))
+
+@app.route('/check_orders_now')
+def check_orders_now():
+    """Manually trigger order execution check"""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    
+    print("🔄 Manual order check triggered by user")
+    check_pending_orders()
+    flash("✅ Order check completed! Check your orders below.", "success")
     return redirect(url_for('orders'))
 
 @app.route('/trading_pairs')
