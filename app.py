@@ -933,22 +933,64 @@ def risk_quiz():
 def dashboard():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+    
     coins = []
+    top_gainers = []
+    top_losers = []
+    trending_coins = []
+    high_volume_coins = []
+    
+    # Fetch main coins for Market Overview
     response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin,tether")
     if response:
         coins = json.loads(response.text)
     else:
         flash("Failed to fetch market data. Please try again later.", "error")
+    
+    # Fetch extended market data for highlights (top 100 coins)
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=24h")
+    if response:
+        all_coins = json.loads(response.text)
+        
+        # Top 5 Gainers (24h) - sorted by price_change_percentage_24h descending
+        top_gainers = sorted(
+            [c for c in all_coins if c.get('price_change_percentage_24h') is not None], 
+            key=lambda x: x.get('price_change_percentage_24h', 0), 
+            reverse=True
+        )[:5]
+        
+        # Top 5 Losers (24h) - sorted by price_change_percentage_24h ascending
+        top_losers = sorted(
+            [c for c in all_coins if c.get('price_change_percentage_24h') is not None], 
+            key=lambda x: x.get('price_change_percentage_24h', 0)
+        )[:5]
+        
+        # High Volume coins (top 5 by volume)
+        high_volume_coins = sorted(
+            [c for c in all_coins if c.get('total_volume') is not None], 
+            key=lambda x: x.get('total_volume', 0), 
+            reverse=True
+        )[:5]
+    
+    # Fetch trending coins
+    trending_response = fetch_with_retry(f"{COINGECKO_API}/search/trending")
+    if trending_response:
+        trending_data = json.loads(trending_response.text)
+        trending_coins = trending_data.get('coins', [])[:5]
+    
     conn = get_db_connection()
     user = None
     triggered_alerts = []
+    show_onboarding = False
+    
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT crypto_bucks, tether_balance, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
+            cursor.execute("SELECT crypto_bucks, tether_balance, risk_tolerance, achievements, show_onboarding FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
             if user:
                 user['tether_balance'] = float(user.get('tether_balance', 0))
+                show_onboarding = user.get('show_onboarding', False)
             cursor.execute("""
                 SELECT n.id, n.coin_id, n.message, n.created_at, pa.alert_type, pa.target_price 
                 FROM notifications n
@@ -979,7 +1021,17 @@ def dashboard():
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='dashboard', coins=coins, user=user, triggered_alerts=triggered_alerts)
+    
+    return render_template('combined.html', 
+                          section='dashboard', 
+                          coins=coins, 
+                          user=user, 
+                          triggered_alerts=triggered_alerts,
+                          top_gainers=top_gainers,
+                          top_losers=top_losers,
+                          trending_coins=trending_coins,
+                          high_volume_coins=high_volume_coins,
+                          show_onboarding=show_onboarding)
 
 @app.route('/dismiss_alert/<int:notification_id>', methods=['POST'])
 def dismiss_alert(notification_id):
@@ -2072,6 +2124,105 @@ def update_achievements():
                 cursor.close()
                 conn.close()
     return redirect(url_for('achievements'))
+
+@app.route('/learning')
+def learning():
+    """Learning Hub - Interactive tutorials and educational content"""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    user_progress = {
+        'tutorial_completed': False,
+        'lessons_completed': [],
+        'show_onboarding': True
+    }
+    
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT tutorial_completed, tutorial_skipped, lessons_completed, show_onboarding 
+                FROM users WHERE id = %s
+            """, (session['user_id'],))
+            user = cursor.fetchone()
+            if user:
+                user_progress['tutorial_completed'] = user.get('tutorial_completed', False)
+                user_progress['show_onboarding'] = user.get('show_onboarding', True)
+                try:
+                    import json
+                    user_progress['lessons_completed'] = json.loads(user.get('lessons_completed', '[]'))
+                except:
+                    user_progress['lessons_completed'] = []
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    
+    return render_template('combined.html', section='learning', user_progress=user_progress)
+
+@app.route('/complete_lesson', methods=['POST'])
+def complete_lesson():
+    """Mark a lesson as completed"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
+    lesson_id = request.json.get('lesson_id')
+    if not lesson_id:
+        return jsonify({'success': False, 'error': 'Lesson ID required'}), 400
+    
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT lessons_completed FROM users WHERE id = %s", (session['user_id'],))
+            user = cursor.fetchone()
+            
+            import json
+            lessons = json.loads(user.get('lessons_completed', '[]')) if user else []
+            
+            if lesson_id not in lessons:
+                lessons.append(lesson_id)
+                cursor.execute("""
+                    UPDATE users 
+                    SET lessons_completed = %s, tutorial_completed = %s 
+                    WHERE id = %s
+                """, (json.dumps(lessons), len(lessons) >= 7, session['user_id']))
+                conn.commit()
+            
+            cursor.close()
+            conn.close()
+            return jsonify({'success': True, 'completed_count': len(lessons)})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+
+@app.route('/skip_onboarding', methods=['POST'])
+def skip_onboarding():
+    """Skip the onboarding tutorial"""
+    if 'user_id' not in session:
+        return jsonify({'success': False}), 401
+    
+    conn = get_db_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE users 
+                SET show_onboarding = FALSE, tutorial_skipped = TRUE 
+                WHERE id = %s
+            """, (session['user_id'],))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    return jsonify({'success': False}), 500
 
 @app.route('/test-email')
 def test_email():
