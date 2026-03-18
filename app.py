@@ -28,6 +28,36 @@ from risk_assessment_data import (
     get_ai_analysis_prompt
 )
 
+# Import AI Learning System
+from ai_assistant import get_ai_assistant
+from user_profiler import get_user_profiler
+from learning_routes import learning_bp, init_learning_system
+
+
+def _load_local_env_file():
+    """Load key/value pairs from .env into process environment."""
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if not os.path.exists(env_path):
+        return
+
+    try:
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception as e:
+        print(f"Warning: failed to load .env file: {e}")
+
+
+_load_local_env_file()
+
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 bcrypt = Bcrypt(app)
@@ -1236,6 +1266,31 @@ def trade():
             if order_type in ['stop_loss', 'take_profit'] and (stop_price is None or stop_price <= 0):
                 flash("Stop price is required for stop loss/take profit orders", "error")
                 return redirect(url_for(source))
+
+            # Prevent accidental instant fills: validate trigger direction against current market price.
+            if order_type == 'limit' and current_price and current_price > 0:
+                if action == 'buy' and limit_price >= current_price:
+                    flash(
+                        f"Limit buy must be below current market price (${current_price:.4f}). "
+                        "Set a lower limit price or use a market buy.",
+                        "error"
+                    )
+                    return redirect(url_for(source))
+                if action == 'sell' and limit_price <= current_price:
+                    flash(
+                        f"Limit sell must be above current market price (${current_price:.4f}). "
+                        "Set a higher limit price or use a market sell.",
+                        "error"
+                    )
+                    return redirect(url_for(source))
+
+            # Current execution engine supports stop/take-profit on sell side only.
+            if order_type in ['stop_loss', 'take_profit'] and action != 'sell':
+                flash(
+                    f"{order_type.replace('_', ' ').title()} is currently supported for sell orders only.",
+                    "error"
+                )
+                return redirect(url_for(source))
             
             # Get trading pair ID
             cursor.execute(
@@ -2089,6 +2144,176 @@ def test_email():
             return 'Failed to send test email.', 500
     except Exception as e:
         return f'Error: {str(e)}', 500
+
+# ==================== AI TRADE ADVISOR (Phase 1: Before Trade) ====================
+
+# Module-level fallback so the variable always exists
+ai_assistant = None
+ai_assistant_fallback = None
+
+@app.route('/api/trade-advisor', methods=['POST'])
+def trade_advisor():
+    """Phase 1: Before Trade → Decision Help API"""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    # Check if AI assistant is available
+    global ai_assistant, ai_assistant_fallback
+    if ai_assistant is None:
+        return jsonify({'error': 'AI system not initialized. Set GEMINI_API_KEY or ANTHROPIC_API_KEY environment variable and restart the app.'}), 503
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    coin_id = data.get('coin_id', '').lower()
+    current_price = data.get('current_price', 0)
+    price_change_24h = data.get('price_change_24h', 0)
+    
+    if not coin_id or not current_price:
+        return jsonify({'error': 'coin_id and current_price are required'}), 400
+    
+    try:
+        current_price = float(current_price)
+        price_change_24h = float(price_change_24h)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid price values'}), 400
+    
+    try:
+        result = ai_assistant.get_trade_advice(
+            user_id=session['user_id'],
+            coin_id=coin_id,
+            current_price=current_price,
+            price_change_24h=price_change_24h
+        )
+
+        # If primary provider is unavailable, try secondary provider when configured.
+        if (not result.get('ai_available', True)) and ai_assistant_fallback is not None:
+            try:
+                fallback_result = ai_assistant_fallback.get_trade_advice(
+                    user_id=session['user_id'],
+                    coin_id=coin_id,
+                    current_price=current_price,
+                    price_change_24h=price_change_24h
+                )
+
+                if fallback_result.get('ai_available', True):
+                    fallback_result['provider_failover'] = True
+                    fallback_result['primary_provider_error'] = result.get('ai_error', '')
+                    return jsonify(fallback_result)
+            except Exception as fallback_err:
+                print(f"Trade advisor fallback error: {fallback_err}")
+
+        return jsonify(result)
+    except Exception as e:
+        print(f"Trade advisor primary error: {e}")
+
+        if ai_assistant_fallback is not None:
+            try:
+                fallback_result = ai_assistant_fallback.get_trade_advice(
+                    user_id=session['user_id'],
+                    coin_id=coin_id,
+                    current_price=current_price,
+                    price_change_24h=price_change_24h
+                )
+                fallback_result['provider_failover'] = True
+                fallback_result['primary_provider_error'] = str(e)
+                return jsonify(fallback_result)
+            except Exception as fallback_err:
+                print(f"Trade advisor fallback error: {fallback_err}")
+                return jsonify({'error': f'Trade advisor unavailable. Primary: {str(e)} | Fallback: {str(fallback_err)}'}), 503
+
+        return jsonify({'error': f'Trade advisor unavailable: {str(e)}'}), 503
+
+# ==================== AI LEARNING SYSTEM INITIALIZATION ====================
+
+# Initialize AI Assistant and User Profiler
+try:
+    # Provider keys and preference
+    # Gemini: https://makersuite.google.com/app/apikey
+    # Claude: https://console.anthropic.com/
+    gemini_key = os.getenv('GEMINI_API_KEY')
+    anthropic_key = os.getenv('ANTHROPIC_API_KEY')
+    provider_pref = (os.getenv('AI_PROVIDER') or 'auto').strip().lower()
+
+    primary_key = None
+    primary_provider = None
+    fallback_key = None
+    fallback_provider = None
+
+    if provider_pref in ('anthropic', 'claude'):
+        if anthropic_key:
+            primary_key = anthropic_key
+            primary_provider = 'claude'
+        elif gemini_key:
+            primary_key = gemini_key
+            primary_provider = 'gemini'
+    elif provider_pref == 'gemini':
+        if gemini_key:
+            primary_key = gemini_key
+            primary_provider = 'gemini'
+        elif anthropic_key:
+            primary_key = anthropic_key
+            primary_provider = 'claude'
+    else:
+        if gemini_key:
+            primary_key = gemini_key
+            primary_provider = 'gemini'
+        elif anthropic_key:
+            primary_key = anthropic_key
+            primary_provider = 'claude'
+
+    if gemini_key and anthropic_key:
+        if primary_provider == 'gemini':
+            fallback_key = anthropic_key
+            fallback_provider = 'claude'
+        elif primary_provider == 'claude':
+            fallback_key = gemini_key
+            fallback_provider = 'gemini'
+
+    if primary_key:
+        ai_assistant = get_ai_assistant(get_db_connection, primary_key, provider=primary_provider)
+
+        if fallback_key and fallback_provider:
+            try:
+                ai_assistant_fallback = get_ai_assistant(get_db_connection, fallback_key, provider=fallback_provider)
+            except Exception as fallback_init_error:
+                ai_assistant_fallback = None
+                print(f"⚠️  Could not initialize fallback AI provider: {fallback_init_error}")
+
+        user_profiler = get_user_profiler(get_db_connection)
+        
+        # Initialize learning routes with AI components
+        init_learning_system(ai_assistant, user_profiler)
+        
+        # Register learning blueprint
+        app.register_blueprint(learning_bp)
+        
+        print("✅ AI Learning System initialized successfully!")
+        print(f"   - AI Provider: {primary_provider.capitalize()}")
+        if ai_assistant_fallback is not None:
+            print(f"   - Failover Provider: {fallback_provider.capitalize()}")
+        print("   - RAG system ready")
+        print("   - ChromaDB initialized")
+        print("   - Learning routes registered at /learning/*")
+        print("\n📚 Next steps:")
+        print("   1. Run database schema: mysql < learning_system_schema.sql")
+        print("   2. Index knowledge base: POST /learning/api/index-knowledge")
+        print("   3. Visit /learning/hub to start learning!")
+    else:
+        print("⚠️  No AI API key found in environment variables")
+        print("   AI Learning System disabled")
+        print("   To enable AI:")
+        print("   1. Get key: https://makersuite.google.com/app/apikey")
+        print("   2. Set GEMINI_API_KEY and/or ANTHROPIC_API_KEY")
+        print("   3. Optional: set AI_PROVIDER=gemini|anthropic|auto")
+        print("   3. Restart app")
+        
+except Exception as e:
+    print(f"⚠️  Could not initialize AI Learning System: {e}")
+    print("   App will run without learning features")
+
+# ===========================================================================
 
 if __name__ == '__main__':
     try:

@@ -1574,9 +1574,19 @@
                                                     <button type="submit" name="action" value="sell" class="btn btn-danger">Sell</button>
                                                 </div>
                                             </form>
-                                            <button class="btn btn-sm btn-info mt-2 w-100" onclick="showLiveMarketChart('{{ coin.id }}'); return false;">
-                                                <i class="fas fa-chart-line"></i> Chart
-                                            </button>
+                                            <div class="d-flex gap-1 mt-2">
+                                                <button class="btn btn-sm btn-info flex-fill" onclick="showLiveMarketChart('{{ coin.id }}'); return false;">
+                                                    <i class="fas fa-chart-line"></i> Chart
+                                                </button>
+                                                <button class="btn btn-sm btn-ai-advisor flex-fill ai-advice-btn"
+                                                    data-coin-id="{{ coin.id }}"
+                                                    data-coin-name="{{ coin.name }}"
+                                                    data-price="{{ coin.current_price }}"
+                                                    data-change="{{ coin.price_change_percentage_24h | default(0) }}"
+                                                    id="ai-btn-{{ coin.id }}">
+                                                    <i class="fas fa-robot"></i> AI Advisor
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -1834,6 +1844,783 @@
                         stopPrice.style.display = 'block';
                         stopHelp.textContent = 'Locks in profits - sells if price rises to this level';
                     }
+                }
+            </script>
+            
+            <!-- AI Trade Advisor Modal -->
+            <div class="modal fade" id="aiAdvisorModal" tabindex="-1" aria-labelledby="aiAdvisorModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content ai-advisor-modal">
+                        <div class="modal-header ai-advisor-header">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ai-icon-wrapper">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                                <div>
+                                    <h5 class="modal-title" id="aiAdvisorModalLabel">AI Trade Advisor</h5>
+                                    <small class="text-light opacity-75" id="ai-advisor-subtitle">Analyzing market conditions...</small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" id="ai-advisor-body">
+                            <!-- Loading State -->
+                            <div id="ai-advisor-loading" class="text-center py-5">
+                                <div class="ai-loading-animation">
+                                    <div class="ai-pulse-ring"></div>
+                                    <div class="ai-pulse-ring delay-1"></div>
+                                    <div class="ai-pulse-ring delay-2"></div>
+                                    <i class="fas fa-brain ai-brain-icon"></i>
+                                </div>
+                                <h5 class="mt-4 mb-2" style="color: #667eea;">Analyzing Market Data...</h5>
+                                <p class="text-muted">Computing RSI, Moving Averages & AI Prediction</p>
+                                <div class="ai-loading-steps mt-3">
+                                    <div class="ai-step active" id="step-1"><i class="fas fa-chart-bar"></i> Fetching market data</div>
+                                    <div class="ai-step" id="step-2"><i class="fas fa-calculator"></i> Computing indicators</div>
+                                    <div class="ai-step" id="step-3"><i class="fas fa-brain"></i> AI analysis</div>
+                                    <div class="ai-step" id="step-4"><i class="fas fa-check-circle"></i> Generating advice</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Results -->
+                            <div id="ai-advisor-results" style="display:none;">
+                                <!-- Decision Badge -->
+                                <div class="text-center mb-4">
+                                    <div class="ai-decision-badge" id="ai-decision-badge">
+                                        <span id="ai-decision-text">WAIT</span>
+                                    </div>
+                                    <div class="ai-confidence mt-2">
+                                        <span class="text-muted">Confidence:</span>
+                                        <span id="ai-confidence-text" class="fw-bold ms-1">Medium</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Market Indicators -->
+                                <div class="ai-indicators-grid mb-4">
+                                    <div class="ai-indicator">
+                                        <div class="ai-indicator-label">RSI (14)</div>
+                                        <div class="ai-indicator-value" id="ai-rsi">50.0</div>
+                                        <div class="ai-indicator-bar">
+                                            <div class="ai-indicator-fill" id="ai-rsi-bar" style="width:50%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-indicator">
+                                        <div class="ai-indicator-label">MA10</div>
+                                        <div class="ai-indicator-value" id="ai-ma10">$0.00</div>
+                                    </div>
+                                    <div class="ai-indicator">
+                                        <div class="ai-indicator-label">MA50</div>
+                                        <div class="ai-indicator-value" id="ai-ma50">$0.00</div>
+                                    </div>
+                                    <div class="ai-indicator">
+                                        <div class="ai-indicator-label">Trend</div>
+                                        <div class="ai-indicator-value" id="ai-trend">—</div>
+                                    </div>
+                                    <div class="ai-indicator">
+                                        <div class="ai-indicator-label">AI Prediction</div>
+                                        <div class="ai-indicator-value" id="ai-prediction">50%</div>
+                                        <div class="ai-indicator-bar">
+                                            <div class="ai-indicator-fill prediction" id="ai-pred-bar" style="width:50%"></div>
+                                        </div>
+                                    </div>
+                                    <div class="ai-indicator">
+                                        <div class="ai-indicator-label">Your Risk Level</div>
+                                        <div class="ai-indicator-value" id="ai-risk-level">Medium</div>
+                                    </div>
+                                </div>
+
+                                <div class="ai-section mb-3">
+                                    <h6><i class="fas fa-chart-column" style="color: #60a5fa;"></i> Signal Score Graph</h6>
+                                    <canvas id="ai-signal-score-chart" height="110"></canvas>
+                                </div>
+
+                                <div class="ai-section mb-3">
+                                    <h6><i class="fas fa-chart-line" style="color: #38bdf8;"></i> 30-Day Price & Volume Context</h6>
+                                    <canvas id="ai-market-context-chart" height="130"></canvas>
+                                </div>
+                                
+                                <!-- Key Reasoning -->
+                                <div class="ai-section mb-3">
+                                    <h6><i class="fas fa-lightbulb" style="color: #f59e0b;"></i> Key Reasoning</h6>
+                                    <ul class="ai-reasoning-list" id="ai-reasoning-list">
+                                    </ul>
+                                </div>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="ai-section h-100">
+                                            <h6><i class="fas fa-circle-check" style="color: #10b981;"></i> Why Consider Buying</h6>
+                                            <ul class="ai-reasoning-list" id="ai-why-buy-list"></ul>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="ai-section h-100">
+                                            <h6><i class="fas fa-triangle-exclamation" style="color: #f97316;"></i> Why Not Buy Yet</h6>
+                                            <ul class="ai-reasoning-list" id="ai-why-not-buy-list"></ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Risk Warning -->
+                                <div class="ai-section ai-warning-section mb-3" id="ai-warning-section" style="display:none;">
+                                    <h6><i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> Risk Warning</h6>
+                                    <p id="ai-risk-warning" class="mb-0"></p>
+                                </div>
+                                
+                                <!-- Beginner Tip -->
+                                <div class="ai-section ai-tip-section mb-3" id="ai-tip-section" style="display:none;">
+                                    <h6><i class="fas fa-graduation-cap" style="color: #10b981;"></i> Beginner Tip</h6>
+                                    <p id="ai-beginner-tip" class="mb-0"></p>
+                                </div>
+                                
+                                <!-- Disclaimer -->
+                                <div class="ai-disclaimer">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>This is for a <strong>SIMULATOR</strong> with fake money. NOT financial advice.</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Error State -->
+                            <div id="ai-advisor-error" style="display:none;" class="text-center py-4">
+                                <i class="fas fa-exclamation-circle" style="font-size: 48px; color: #ef4444;"></i>
+                                <h5 class="mt-3">Analysis Failed</h5>
+                                <p class="text-muted" id="ai-error-message">Could not generate trade advice.</p>
+                                <button class="btn btn-primary" onclick="retryTradeAdvice()">
+                                    <i class="fas fa-redo"></i> Try Again
+                                </button>
+                            </div>
+                        </div>
+                        <div class="modal-footer ai-advisor-footer">
+                            <small class="text-muted" id="ai-response-time"></small>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                /* AI Advisor Button */
+                .btn-ai-advisor {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border: none;
+                    color: white;
+                    font-weight: 600;
+                    font-size: 0.75rem;
+                    transition: all 0.3s ease;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .btn-ai-advisor:hover {
+                    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+                    color: white;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                }
+                .btn-ai-advisor:active {
+                    transform: translateY(0);
+                }
+                .btn-ai-advisor.loading {
+                    pointer-events: none;
+                    opacity: 0.7;
+                }
+                
+                /* AI Advisor Modal */
+                .ai-advisor-modal {
+                    background: #0f1724;
+                    border: 1px solid rgba(102, 126, 234, 0.3);
+                    border-radius: 16px;
+                    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(102, 126, 234, 0.1);
+                    overflow: hidden;
+                }
+                .ai-advisor-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-bottom: none;
+                    padding: 20px 24px;
+                }
+                .ai-icon-wrapper {
+                    width: 42px;
+                    height: 42px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 20px;
+                    color: white;
+                }
+                .ai-advisor-modal .modal-title {
+                    color: white;
+                    font-weight: 700;
+                    font-size: 1.2rem;
+                }
+                .ai-advisor-footer {
+                    background: rgba(15, 23, 36, 0.8);
+                    border-top: 1px solid rgba(255,255,255,0.1);
+                    padding: 12px 24px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .ai-advisor-modal .modal-body {
+                    padding: 24px;
+                    color: #e2e8f0;
+                }
+                
+                /* Loading Animation */
+                .ai-loading-animation {
+                    position: relative;
+                    width: 80px;
+                    height: 80px;
+                    margin: 0 auto;
+                }
+                .ai-pulse-ring {
+                    position: absolute;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 50%;
+                    border: 2px solid rgba(102, 126, 234, 0.3);
+                    animation: aiPulse 2s ease-out infinite;
+                }
+                .ai-pulse-ring.delay-1 { animation-delay: 0.5s; }
+                .ai-pulse-ring.delay-2 { animation-delay: 1s; }
+                @keyframes aiPulse {
+                    0% { transform: scale(0.5); opacity: 1; }
+                    100% { transform: scale(2); opacity: 0; }
+                }
+                .ai-brain-icon {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    font-size: 32px;
+                    color: #667eea;
+                    animation: aiBrainGlow 1.5s ease-in-out infinite;
+                }
+                @keyframes aiBrainGlow {
+                    0%, 100% { text-shadow: 0 0 10px rgba(102, 126, 234, 0.3); }
+                    50% { text-shadow: 0 0 25px rgba(102, 126, 234, 0.8), 0 0 50px rgba(118, 75, 162, 0.4); }
+                }
+                .ai-loading-steps {
+                    display: flex;
+                    justify-content: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+                .ai-step {
+                    padding: 6px 12px;
+                    border-radius: 20px;
+                    font-size: 0.75rem;
+                    background: rgba(255,255,255,0.05);
+                    color: #94a3b8;
+                    transition: all 0.3s ease;
+                }
+                .ai-step.active {
+                    background: rgba(102, 126, 234, 0.2);
+                    color: #667eea;
+                    border: 1px solid rgba(102, 126, 234, 0.3);
+                }
+                .ai-step.done {
+                    background: rgba(16, 185, 129, 0.2);
+                    color: #10b981;
+                    border: 1px solid rgba(16, 185, 129, 0.3);
+                }
+                
+                /* Decision Badge */
+                .ai-decision-badge {
+                    display: inline-block;
+                    padding: 12px 32px;
+                    border-radius: 50px;
+                    font-size: 1.4rem;
+                    font-weight: 800;
+                    letter-spacing: 2px;
+                    text-transform: uppercase;
+                    animation: decisionAppear 0.5s ease-out;
+                }
+                @keyframes decisionAppear {
+                    from { transform: scale(0.5); opacity: 0; }
+                    to { transform: scale(1); opacity: 1; }
+                }
+                .ai-decision-badge.buy {
+                    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+                    color: #10b981;
+                    border: 2px solid rgba(16, 185, 129, 0.4);
+                    box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
+                }
+                .ai-decision-badge.wait {
+                    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.1));
+                    color: #f59e0b;
+                    border: 2px solid rgba(245, 158, 11, 0.4);
+                    box-shadow: 0 0 30px rgba(245, 158, 11, 0.2);
+                }
+                .ai-decision-badge.caution {
+                    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.1));
+                    color: #eab308;
+                    border: 2px solid rgba(234, 179, 8, 0.4);
+                    box-shadow: 0 0 30px rgba(234, 179, 8, 0.2);
+                }
+                
+                .ai-confidence {
+                    font-size: 0.9rem;
+                }
+                
+                /* Indicators Grid */
+                .ai-indicators-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 12px;
+                }
+                @media (max-width: 576px) {
+                    .ai-indicators-grid {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                }
+                .ai-indicator {
+                    background: rgba(255,255,255,0.05);
+                    border-radius: 12px;
+                    padding: 14px;
+                    text-align: center;
+                    border: 1px solid rgba(255,255,255,0.08);
+                }
+                .ai-indicator-label {
+                    font-size: 0.7rem;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    color: #94a3b8;
+                    margin-bottom: 4px;
+                }
+                .ai-indicator-value {
+                    font-size: 1.1rem;
+                    font-weight: 700;
+                    color: #e2e8f0;
+                }
+                .ai-indicator-bar {
+                    height: 4px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 2px;
+                    margin-top: 8px;
+                    overflow: hidden;
+                }
+                .ai-indicator-fill {
+                    height: 100%;
+                    border-radius: 2px;
+                    transition: width 1s ease-out;
+                    background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+                }
+                .ai-indicator-fill.prediction {
+                    background: linear-gradient(90deg, #ef4444, #f59e0b, #10b981);
+                }
+                
+                /* Sections */
+                .ai-section {
+                    background: rgba(255,255,255,0.03);
+                    border-radius: 12px;
+                    padding: 16px;
+                    border: 1px solid rgba(255,255,255,0.06);
+                }
+                .ai-section h6 {
+                    font-weight: 700;
+                    margin-bottom: 12px;
+                    font-size: 0.9rem;
+                }
+                .ai-reasoning-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                }
+                .ai-reasoning-list li {
+                    padding: 8px 0;
+                    padding-left: 24px;
+                    position: relative;
+                    color: #cbd5e1;
+                    font-size: 0.9rem;
+                    line-height: 1.5;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                }
+                .ai-reasoning-list li:last-child {
+                    border-bottom: none;
+                }
+                .ai-reasoning-list li::before {
+                    content: '→';
+                    position: absolute;
+                    left: 0;
+                    color: #667eea;
+                    font-weight: bold;
+                }
+                
+                .ai-warning-section {
+                    border-color: rgba(239, 68, 68, 0.2);
+                    background: rgba(239, 68, 68, 0.05);
+                }
+                .ai-warning-section p {
+                    color: #fca5a5;
+                    font-size: 0.9rem;
+                }
+                .ai-tip-section {
+                    border-color: rgba(16, 185, 129, 0.2);
+                    background: rgba(16, 185, 129, 0.05);
+                }
+                .ai-tip-section p {
+                    color: #6ee7b7;
+                    font-size: 0.9rem;
+                }
+                
+                .ai-disclaimer {
+                    background: rgba(245, 158, 11, 0.1);
+                    border: 1px solid rgba(245, 158, 11, 0.2);
+                    border-radius: 8px;
+                    padding: 10px 14px;
+                    font-size: 0.75rem;
+                    color: #fbbf24;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+            </style>
+            
+            <script>
+                // AI Trade Advisor Functions
+                let lastAdviceRequest = {};
+                let aiSignalScoreChart = null;
+                let aiMarketContextChart = null;
+                
+                function getTradeAdvice(coinId, coinName, currentPrice, priceChange) {
+                    lastAdviceRequest = { coinId, coinName, currentPrice, priceChange };
+                    
+                    // Update modal header
+                    document.getElementById('ai-advisor-subtitle').textContent = `Analyzing ${coinName || coinId.toUpperCase()}...`;
+                    
+                    // Show loading, hide results/error
+                    document.getElementById('ai-advisor-loading').style.display = 'block';
+                    document.getElementById('ai-advisor-results').style.display = 'none';
+                    document.getElementById('ai-advisor-error').style.display = 'none';
+                    document.getElementById('ai-response-time').textContent = '';
+                    
+                    // Animate loading steps
+                    animateLoadingSteps();
+                    
+                    // Show modal
+                    const modal = new bootstrap.Modal(document.getElementById('aiAdvisorModal'));
+                    modal.show();
+                    
+                    // Add loading state to button
+                    const btn = document.getElementById('ai-btn-' + coinId);
+                    if (btn) btn.classList.add('loading');
+                    
+                    // Make API call
+                    fetch('/api/trade-advisor', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            coin_id: coinId,
+                            current_price: currentPrice,
+                            price_change_24h: priceChange || 0
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (btn) btn.classList.remove('loading');
+                        
+                        if (data.error) {
+                            showAdvisorError(data.error);
+                            return;
+                        }
+                        
+                        displayTradeAdvice(data, coinName || coinId);
+                    })
+                    .catch(error => {
+                        if (btn) btn.classList.remove('loading');
+                        showAdvisorError('Network error. Please check your connection and try again.');
+                    });
+                }
+                
+                function animateLoadingSteps() {
+                    const steps = ['step-1', 'step-2', 'step-3', 'step-4'];
+                    steps.forEach((id, i) => {
+                        const el = document.getElementById(id);
+                        el.className = 'ai-step';
+                        setTimeout(() => {
+                            el.classList.add('active');
+                            if (i > 0) {
+                                document.getElementById(steps[i-1]).classList.remove('active');
+                                document.getElementById(steps[i-1]).classList.add('done');
+                            }
+                        }, i * 1500);
+                    });
+                }
+                
+                function displayTradeAdvice(data, coinName) {
+                    // Hide loading, show results
+                    document.getElementById('ai-advisor-loading').style.display = 'none';
+                    document.getElementById('ai-advisor-results').style.display = 'block';
+                    
+                    // Update subtitle
+                    document.getElementById('ai-advisor-subtitle').textContent = `Analysis for ${coinName}`;
+                    
+                    // Decision badge
+                    const badge = document.getElementById('ai-decision-badge');
+                    const decision = data.parsed?.decision || 'WAIT';
+                    document.getElementById('ai-decision-text').textContent = decision;
+                    badge.className = 'ai-decision-badge';
+                    if (decision === 'BUY') badge.classList.add('buy');
+                    else if (decision === 'WAIT') badge.classList.add('wait');
+                    else badge.classList.add('caution');
+                    
+                    // Confidence
+                    const confText = document.getElementById('ai-confidence-text');
+                    confText.textContent = data.parsed?.confidence || 'Medium';
+                    const conf = (data.parsed?.confidence || '').toLowerCase();
+                    confText.style.color = conf === 'high' ? '#10b981' : conf === 'low' ? '#ef4444' : '#f59e0b';
+                    
+                    // Market indicators
+                    const md = data.market_data || {};
+                    document.getElementById('ai-rsi').textContent = (md.rsi || 50).toFixed(1);
+                    document.getElementById('ai-rsi-bar').style.width = (md.rsi || 50) + '%';
+                    document.getElementById('ai-ma10').textContent = '$' + formatNumber(md.ma10 || 0);
+                    document.getElementById('ai-ma50').textContent = '$' + formatNumber(md.ma50 || 0);
+                    
+                    const trendEl = document.getElementById('ai-trend');
+                    trendEl.textContent = md.trend || '—';
+                    trendEl.style.color = md.trend === 'Bullish' ? '#10b981' : '#ef4444';
+                    
+                    document.getElementById('ai-prediction').textContent = (md.prediction || 50).toFixed(1) + '%';
+                    document.getElementById('ai-pred-bar').style.width = (md.prediction || 50) + '%';
+                    
+                    // Risk level
+                    const riskEl = document.getElementById('ai-risk-level');
+                    riskEl.textContent = (data.user_risk_level || 'medium').charAt(0).toUpperCase() + (data.user_risk_level || 'medium').slice(1);
+                    
+                    // Key reasoning
+                    const reasoningList = document.getElementById('ai-reasoning-list');
+                    reasoningList.innerHTML = '';
+                    const reasons = data.parsed?.reasoning || [];
+                    if (reasons.length > 0) {
+                        reasons.forEach(r => {
+                            const li = document.createElement('li');
+                            li.textContent = r;
+                            reasoningList.appendChild(li);
+                        });
+                    } else {
+                        // Fallback: show raw advice
+                        const li = document.createElement('li');
+                        li.textContent = data.advice?.substring(0, 500) || 'Analysis complete.';
+                        reasoningList.appendChild(li);
+                    }
+
+                    // Why buy / why wait sections
+                    renderBulletList('ai-why-buy-list', data.parsed?.why_buy, [
+                        'Trend and momentum suggest potential upside if risk is managed.',
+                        'Prediction and current structure support a possible entry setup.'
+                    ]);
+                    renderBulletList('ai-why-not-buy-list', data.parsed?.why_not_buy, [
+                        'Signals are not fully aligned, so entry timing risk is still present.',
+                        'Waiting for stronger confirmation can improve risk-reward.'
+                    ]);
+
+                    // Signal score graph
+                    renderSignalScoreGraph(data.market_data?.signal_scores || {});
+
+                    // Historical context graph (price + volume + current price line)
+                    renderPhase1MarketContextChart(md.coin, Number(md.price || 0));
+                    
+                    // Risk warning
+                    const warningSection = document.getElementById('ai-warning-section');
+                    const warningText = data.parsed?.risk_warning || '';
+                    if (warningText) {
+                        warningSection.style.display = 'block';
+                        document.getElementById('ai-risk-warning').textContent = warningText;
+                    } else {
+                        warningSection.style.display = 'none';
+                    }
+                    
+                    // Beginner tip
+                    const tipSection = document.getElementById('ai-tip-section');
+                    const tipText = data.parsed?.beginner_tip || '';
+                    if (tipText) {
+                        tipSection.style.display = 'block';
+                        document.getElementById('ai-beginner-tip').textContent = tipText;
+                    } else {
+                        tipSection.style.display = 'none';
+                    }
+                    
+                    // Response time
+                    document.getElementById('ai-response-time').textContent = 
+                        `Analysis completed in ${(data.response_time_ms / 1000).toFixed(1)}s`;
+                }
+
+                function renderBulletList(elementId, items, fallbackItems) {
+                    const list = document.getElementById(elementId);
+                    if (!list) return;
+                    list.innerHTML = '';
+
+                    const values = (items && items.length ? items : fallbackItems).slice(0, 4);
+                    values.forEach(text => {
+                        const li = document.createElement('li');
+                        li.textContent = text;
+                        list.appendChild(li);
+                    });
+                }
+
+                function renderSignalScoreGraph(scores) {
+                    const canvas = document.getElementById('ai-signal-score-chart');
+                    if (!canvas || typeof Chart === 'undefined') return;
+
+                    const ctx = canvas.getContext('2d');
+                    if (aiSignalScoreChart) {
+                        aiSignalScoreChart.destroy();
+                    }
+
+                    const labels = ['RSI Health', 'Trend Strength', 'Momentum', 'Entry Score', 'Caution'];
+                    const data = [
+                        Number(scores.rsi_score ?? 50),
+                        Number(scores.trend_score ?? 50),
+                        Number(scores.momentum_score ?? 50),
+                        Number(scores.entry_score ?? 50),
+                        Number(scores.caution_score ?? 50),
+                    ];
+
+                    aiSignalScoreChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data,
+                                backgroundColor: [
+                                    'rgba(14, 165, 233, 0.55)',
+                                    'rgba(34, 197, 94, 0.55)',
+                                    'rgba(250, 204, 21, 0.55)',
+                                    'rgba(16, 185, 129, 0.55)',
+                                    'rgba(239, 68, 68, 0.55)'
+                                ],
+                                borderColor: [
+                                    '#0ea5e9', '#22c55e', '#facc15', '#10b981', '#ef4444'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    min: 0,
+                                    max: 100,
+                                    ticks: { stepSize: 20 }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                function renderPhase1MarketContextChart(coinId, currentPrice) {
+                    const canvas = document.getElementById('ai-market-context-chart');
+                    if (!canvas || typeof Chart === 'undefined' || !coinId) return;
+
+                    fetch(`/historical/${coinId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data || data.error || !Array.isArray(data.prices) || !data.prices.length) return;
+
+                            const ctx = canvas.getContext('2d');
+                            if (aiMarketContextChart) aiMarketContextChart.destroy();
+
+                            const currentLine = data.prices.map(() => currentPrice || data.prices[data.prices.length - 1]);
+
+                            aiMarketContextChart = new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: data.dates,
+                                    datasets: [
+                                        {
+                                            label: 'Price (USD)',
+                                            data: data.prices,
+                                            borderColor: '#3b82f6',
+                                            backgroundColor: 'rgba(59, 130, 246, 0.14)',
+                                            yAxisID: 'y-price',
+                                            fill: true,
+                                            pointRadius: 0,
+                                            tension: 0.28,
+                                            borderWidth: 2
+                                        },
+                                        {
+                                            label: 'Volume (USD)',
+                                            data: data.volumes,
+                                            borderColor: '#10b981',
+                                            backgroundColor: 'rgba(16, 185, 129, 0.10)',
+                                            yAxisID: 'y-volume',
+                                            fill: false,
+                                            pointRadius: 0,
+                                            tension: 0.22,
+                                            borderWidth: 1.7
+                                        },
+                                        {
+                                            label: 'Current Price',
+                                            data: currentLine,
+                                            borderColor: '#f59e0b',
+                                            yAxisID: 'y-price',
+                                            fill: false,
+                                            pointRadius: 0,
+                                            tension: 0,
+                                            borderWidth: 1.2,
+                                            borderDash: [5, 5]
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    plugins: { legend: { labels: { color: '#cbd5e1' } } },
+                                    scales: {
+                                        x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                                        'y-price': { type: 'linear', position: 'left', ticks: { color: '#93c5fd' } },
+                                        'y-volume': { type: 'linear', position: 'right', ticks: { color: '#6ee7b7' }, grid: { drawOnChartArea: false } }
+                                    }
+                                }
+                            });
+                        })
+                        .catch(() => {});
+                }
+                
+                function showAdvisorError(message) {
+                    document.getElementById('ai-advisor-loading').style.display = 'none';
+                    document.getElementById('ai-advisor-results').style.display = 'none';
+                    document.getElementById('ai-advisor-error').style.display = 'block';
+                    document.getElementById('ai-error-message').textContent = message;
+                }
+                
+                function retryTradeAdvice() {
+                    if (lastAdviceRequest.coinId) {
+                        getTradeAdvice(
+                            lastAdviceRequest.coinId,
+                            lastAdviceRequest.coinName,
+                            lastAdviceRequest.currentPrice,
+                            lastAdviceRequest.priceChange
+                        );
+                    }
+                }
+                
+                function formatNumber(num) {
+                    if (num >= 1000) return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    if (num >= 1) return num.toFixed(2);
+                    return num.toFixed(6);
+                }
+
+                function bindAIAdvisorButtons() {
+                    document.querySelectorAll('.ai-advice-btn').forEach(btn => {
+                        btn.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            getTradeAdvice(
+                                this.dataset.coinId,
+                                this.dataset.coinName,
+                                parseFloat(this.dataset.price || 0),
+                                parseFloat(this.dataset.change || 0)
+                            );
+                        });
+                    });
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', bindAIAdvisorButtons);
+                } else {
+                    bindAIAdvisorButtons();
                 }
             </script>
         </div>
@@ -2525,6 +3312,14 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.matrix && data.matrix.length > 0) {
+                                if (!Chart.registry.getController('matrix')) {
+                                    const container = document.getElementById('correlationChartContainer');
+                                    if (container) {
+                                        container.innerHTML = '<div class="text-muted p-3">Correlation heatmap unavailable: Chart.js matrix controller is not loaded.</div>';
+                                    }
+                                    return;
+                                }
+
                                 const ctx = document.getElementById('correlationChart').getContext('2d');
                                 new Chart(ctx, {
                                     type: 'matrix',
@@ -2628,6 +3423,7 @@
                                 <th>Purchase Price</th>
                                 <th>Sold Price</th>
                                 <th>Profit/Loss</th>
+                                <th>AI Review</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2647,11 +3443,20 @@
                                             {% endif %}
                                             ${{ transaction.profit }}
                                         </td>
+                                        <td>
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-primary analyze-trade-btn"
+                                                data-transaction-id="{{ transaction.id }}"
+                                                data-coin="{{ transaction.coin_id.upper() }}">
+                                                <i class="fas fa-brain"></i> Analyze
+                                            </button>
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="6" class="text-center">
+                                    <td colspan="7" class="text-center">
                                         <div class="empty-state">
                                             <i class="fas fa-inbox"></i>
                                             <h4>No Archived Transactions</h4>
@@ -2672,6 +3477,373 @@
                     </div>
                 {% endif %}
             </div>
+
+            <div class="modal fade" id="tradeMistakeModal" tabindex="-1" aria-labelledby="tradeMistakeModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="tradeMistakeModalLabel"><i class="fas fa-brain"></i> Trade Mistake Analyzer</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="trade-mistake-loading" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-3 mb-0">Analyzing your completed trade...</p>
+                            </div>
+
+                            <div id="trade-mistake-error" class="alert alert-danger" style="display:none;"></div>
+
+                            <div id="trade-mistake-results" style="display:none;">
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-3">
+                                        <div class="p-2 rounded border bg-light">
+                                            <small class="text-muted d-block">Coin</small>
+                                            <strong id="tm-coin">-</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-2 rounded border bg-light">
+                                            <small class="text-muted d-block">Buy Price</small>
+                                            <strong id="tm-buy-price">-</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-2 rounded border bg-light">
+                                            <small class="text-muted d-block">Sell Price</small>
+                                            <strong id="tm-sell-price">-</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-2 rounded border bg-light">
+                                            <small class="text-muted d-block">P/L</small>
+                                            <strong id="tm-profit-loss">-</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="p-2 rounded border bg-light mb-3">
+                                    <small class="text-muted d-block">Confidence Score</small>
+                                    <strong id="tm-confidence-score">-</strong>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="fw-semibold mb-1">Trade Quality Graph</div>
+                                    <canvas id="tm-quality-chart" height="120"></canvas>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="fw-semibold mb-1">Trade Context Chart (30 Days)</div>
+                                    <canvas id="tm-market-chart" height="130"></canvas>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="fw-semibold mb-1">Mistake Type</div>
+                                    <div id="tm-mistake-type" class="p-2 rounded border bg-light">-</div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="fw-semibold mb-1">Explanation</div>
+                                    <div id="tm-explanation" class="p-2 rounded border bg-light">-</div>
+                                </div>
+                                <div class="mb-2">
+                                    <div class="fw-semibold mb-1">Improvement Tip</div>
+                                    <div id="tm-tip" class="p-2 rounded border bg-light">-</div>
+                                </div>
+
+                                <div class="mb-2">
+                                    <div class="fw-semibold mb-1">What Went Well</div>
+                                    <div id="tm-went-well" class="p-2 rounded border bg-light">-</div>
+                                </div>
+
+                                <div class="mb-2">
+                                    <div class="fw-semibold mb-1">What Went Wrong</div>
+                                    <div id="tm-went-wrong" class="p-2 rounded border bg-light">-</div>
+                                </div>
+
+                                <div class="mb-2">
+                                    <div class="fw-semibold mb-1">Action Plan</div>
+                                    <ul id="tm-action-plan" class="list-group"></ul>
+                                </div>
+                                <small id="tm-response-time" class="text-muted"></small>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                let tradeQualityChart = null;
+                let tradeMarketChart = null;
+
+                function showTradeMistakeLoading() {
+                    const loadingEl = document.getElementById('trade-mistake-loading');
+                    const resultsEl = document.getElementById('trade-mistake-results');
+                    const errorEl = document.getElementById('trade-mistake-error');
+
+                    if (loadingEl) loadingEl.style.display = 'block';
+                    if (resultsEl) resultsEl.style.display = 'none';
+                    if (errorEl) errorEl.style.display = 'none';
+                }
+
+                function showTradeMistakeError(message) {
+                    const loadingEl = document.getElementById('trade-mistake-loading');
+                    const errorEl = document.getElementById('trade-mistake-error');
+                    const resultsEl = document.getElementById('trade-mistake-results');
+
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (errorEl) {
+                        errorEl.textContent = message || 'Could not analyze this trade.';
+                        errorEl.style.display = 'block';
+                    } else {
+                        alert(message || 'Could not analyze this trade.');
+                    }
+                    if (resultsEl) resultsEl.style.display = 'none';
+                }
+
+                function setTradeMistakeResults(payload) {
+                    const loadingEl = document.getElementById('trade-mistake-loading');
+                    const errorEl = document.getElementById('trade-mistake-error');
+                    const resultsEl = document.getElementById('trade-mistake-results');
+
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (errorEl) errorEl.style.display = 'none';
+                    if (resultsEl) resultsEl.style.display = 'block';
+
+                    const details = payload.trade_details || {};
+                    const parsed = payload.parsed || {};
+
+                    const coinEl = document.getElementById('tm-coin');
+                    const buyEl = document.getElementById('tm-buy-price');
+                    const sellEl = document.getElementById('tm-sell-price');
+                    const pnlEl = document.getElementById('tm-profit-loss');
+                    const typeEl = document.getElementById('tm-mistake-type');
+                    const confidenceEl = document.getElementById('tm-confidence-score');
+                    const explanationEl = document.getElementById('tm-explanation');
+                    const tipEl = document.getElementById('tm-tip');
+                    const wellEl = document.getElementById('tm-went-well');
+                    const wrongEl = document.getElementById('tm-went-wrong');
+                    const actionPlanEl = document.getElementById('tm-action-plan');
+                    const responseEl = document.getElementById('tm-response-time');
+
+                    if (coinEl) coinEl.textContent = details.coin || '-';
+                    if (buyEl) buyEl.textContent = details.buy_price !== undefined ? `$${Number(details.buy_price).toFixed(2)}` : '-';
+                    if (sellEl) sellEl.textContent = details.sell_price !== undefined ? `$${Number(details.sell_price).toFixed(2)}` : '-';
+                    if (pnlEl) pnlEl.textContent = details.profit_loss || '-';
+
+                    if (typeEl) typeEl.textContent = parsed.mistake_type || 'Not specified';
+                    if (confidenceEl) confidenceEl.textContent = parsed.confidence_score || `${payload.metrics?.overall || 60}/100`;
+                    if (explanationEl) explanationEl.textContent = parsed.explanation || payload.analysis || 'No explanation available.';
+                    if (tipEl) tipEl.textContent = parsed.improvement_tip || 'Review your entry and exit rules before the next trade.';
+                    if (wellEl) wellEl.textContent = parsed.what_went_well || 'You completed the trade and reviewed it, which is a strong habit.';
+                    if (wrongEl) wrongEl.textContent = parsed.what_went_wrong || 'Entry/exit criteria were not explicit enough before placing the trade.';
+
+                    if (actionPlanEl) {
+                        actionPlanEl.innerHTML = '';
+                        const plan = (parsed.action_plan && parsed.action_plan.length)
+                            ? parsed.action_plan
+                            : [
+                                'Write entry, stop-loss, and take-profit before placing the next order.',
+                                'Risk only 1-2% of account value per trade.',
+                                'Review execution quality 24 hours after closing the trade.'
+                            ];
+                        plan.slice(0, 4).forEach(step => {
+                            const li = document.createElement('li');
+                            li.className = 'list-group-item';
+                            li.textContent = step;
+                            actionPlanEl.appendChild(li);
+                        });
+                    }
+
+                    renderTradeQualityChart(payload.metrics || {});
+                    renderPhase2MarketChart(details);
+
+                    const responseMs = payload.response_time_ms || payload.response_time;
+                    if (responseEl) {
+                        responseEl.textContent = responseMs ? `Analysis completed in ${(responseMs / 1000).toFixed(1)}s` : '';
+                    }
+                }
+
+                function renderTradeQualityChart(metrics) {
+                    const canvas = document.getElementById('tm-quality-chart');
+                    if (!canvas || typeof Chart === 'undefined') return;
+
+                    const ctx = canvas.getContext('2d');
+                    if (tradeQualityChart) {
+                        tradeQualityChart.destroy();
+                    }
+
+                    const labels = ['Entry Timing', 'Exit Discipline', 'Risk Mgmt', 'Emotional Control', 'Overall'];
+                    const values = [
+                        Number(metrics.entry_timing ?? 55),
+                        Number(metrics.exit_discipline ?? 55),
+                        Number(metrics.risk_management ?? 60),
+                        Number(metrics.emotional_control ?? 60),
+                        Number(metrics.overall ?? 58)
+                    ];
+
+                    tradeQualityChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: [
+                                    'rgba(59, 130, 246, 0.55)',
+                                    'rgba(16, 185, 129, 0.55)',
+                                    'rgba(234, 179, 8, 0.55)',
+                                    'rgba(244, 114, 182, 0.55)',
+                                    'rgba(168, 85, 247, 0.55)'
+                                ],
+                                borderColor: ['#3b82f6', '#10b981', '#eab308', '#f472b6', '#a855f7'],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    min: 0,
+                                    max: 100,
+                                    ticks: { stepSize: 20 }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                function renderPhase2MarketChart(details) {
+                    const canvas = document.getElementById('tm-market-chart');
+                    if (!canvas || typeof Chart === 'undefined') return;
+
+                    const coinId = (details.coin_id || details.coin || '').toString().toLowerCase();
+                    if (!coinId) return;
+
+                    const buyPrice = Number(details.buy_price || 0);
+                    const sellPrice = Number(details.sell_price || 0);
+
+                    fetch(`/historical/${coinId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data || data.error || !Array.isArray(data.prices) || !data.prices.length) return;
+
+                            const ctx = canvas.getContext('2d');
+                            if (tradeMarketChart) tradeMarketChart.destroy();
+
+                            const buyLine = data.prices.map(() => buyPrice || null);
+                            const sellLine = data.prices.map(() => sellPrice || null);
+
+                            tradeMarketChart = new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: data.dates,
+                                    datasets: [
+                                        {
+                                            label: 'Price (USD)',
+                                            data: data.prices,
+                                            borderColor: '#2563eb',
+                                            backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                                            yAxisID: 'y-price',
+                                            fill: true,
+                                            pointRadius: 0,
+                                            tension: 0.28,
+                                            borderWidth: 2
+                                        },
+                                        {
+                                            label: 'Volume (USD)',
+                                            data: data.volumes,
+                                            borderColor: '#16a34a',
+                                            backgroundColor: 'rgba(22, 163, 74, 0.10)',
+                                            yAxisID: 'y-volume',
+                                            fill: false,
+                                            pointRadius: 0,
+                                            tension: 0.2,
+                                            borderWidth: 1.6
+                                        },
+                                        {
+                                            label: 'Buy Price',
+                                            data: buyLine,
+                                            borderColor: '#22c55e',
+                                            yAxisID: 'y-price',
+                                            fill: false,
+                                            pointRadius: 0,
+                                            tension: 0,
+                                            borderWidth: 1.2,
+                                            borderDash: [6, 4]
+                                        },
+                                        {
+                                            label: 'Sell Price',
+                                            data: sellLine,
+                                            borderColor: '#ef4444',
+                                            yAxisID: 'y-price',
+                                            fill: false,
+                                            pointRadius: 0,
+                                            tension: 0,
+                                            borderWidth: 1.2,
+                                            borderDash: [6, 4]
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    plugins: { legend: { display: true } },
+                                    scales: {
+                                        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                                        'y-price': { type: 'linear', position: 'left' },
+                                        'y-volume': { type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+                                    }
+                                }
+                            });
+                        })
+                        .catch(() => {});
+                }
+
+                function analyzeCompletedTrade(transactionId) {
+                    showTradeMistakeLoading();
+
+                    fetch('/learning/api/trade-mistake-analyzer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ transaction_id: transactionId })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.success) {
+                                showTradeMistakeError(data.error || 'Analysis failed.');
+                                return;
+                            }
+                            setTradeMistakeResults(data);
+                        })
+                        .catch(() => {
+                            showTradeMistakeError('Network error while requesting AI analysis.');
+                        });
+                }
+
+                function bindTradeMistakeButtons() {
+                    document.querySelectorAll('.analyze-trade-btn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const transactionId = Number(this.dataset.transactionId);
+                            const modal = new bootstrap.Modal(document.getElementById('tradeMistakeModal'));
+                            modal.show();
+
+                            if (!transactionId) {
+                                showTradeMistakeError('Invalid transaction id.');
+                                return;
+                            }
+
+                            analyzeCompletedTrade(transactionId);
+                        });
+                    });
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', bindTradeMistakeButtons);
+                } else {
+                    bindTradeMistakeButtons();
+                }
+            </script>
         </div>
 
     {% elif section == 'watchlist' %}

@@ -808,3 +808,81 @@ Provide a comprehensive analysis covering:
 
 Be specific, actionable, and educational. Format with clear headings and bullet points.
 """
+
+
+def get_trade_advisor_prompt(risk_level, coin, current_price, rsi, ma10, ma50, prediction):
+    """Build a concise beginner-friendly pre-trade advisor prompt."""
+    return f"""
+You are an expert crypto trading mentor teaching a beginner.
+
+User Profile:
+- Risk Level: {risk_level}
+- Experience: Beginner
+
+Market Data:
+- Coin: {coin}
+- Current Price: {current_price}
+- RSI: {rsi}
+- 10-day Moving Average: {ma10}
+- 50-day Moving Average: {ma50}
+- AI Prediction: {prediction}% chance price will increase
+
+Task:
+1. Analyze whether the user should BUY now or WAIT.
+2. Explain the reasoning in simple beginner-friendly terms.
+3. Warn about risks if any (FOMO, volatility, bad timing).
+4. Keep explanation short (3-5 lines max).
+
+Output format:
+- Decision: (Buy / Wait / Risky)
+- Explanation:
+- Risk Level: (Low / Medium / High)
+"""
+
+
+def get_trade_mistake_analyzer_prompt(
+    coin,
+    buy_price,
+    sell_price,
+    buy_rsi,
+    sell_rsi,
+    holding_minutes,
+    profit_loss,
+):
+    """Build a beginner-focused post-trade psychology analysis prompt."""
+    return f"""
+You are a trading psychology expert and trading coach analyzing a beginner's completed trade.
+
+Trade Details:
+- Coin: {coin}
+- Buy Price: {buy_price}
+- Sell Price: {sell_price}
+- RSI at Buy: {buy_rsi}
+- RSI at Sell: {sell_rsi}
+- Holding Time: {holding_minutes} minutes
+- Profit/Loss: {profit_loss}
+
+Task:
+1. Identify if the user made any common mistakes:
+   - FOMO Buying
+   - Panic Selling
+   - Overtrading
+   - No Stop Loss
+   - Good Trade (if no mistake)
+2. Explain WHY this behavior is a mistake or good decision.
+3. Keep explanation beginner-friendly.
+4. Be constructive, not harsh.
+5. Give practical corrections the user can apply in the next trade.
+
+Output format:
+- Mistake Type:
+- Confidence Score: (0-100)
+- Explanation:
+- What Went Well:
+- What Went Wrong:
+- Improvement Tip:
+- Action Plan:
+    - <step 1>
+    - <step 2>
+    - <step 3>
+"""
