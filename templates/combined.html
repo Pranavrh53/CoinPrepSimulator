@@ -874,7 +874,7 @@
                             <span class="stat-label">Virtual Balance</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-number">50+</span>
+                            <span class="stat-number">500+</span>
                             <span class="stat-label">Cryptocurrencies</span>
                         </div>
                         <div class="stat-item">
@@ -1142,6 +1142,7 @@
                         <a class="nav-link" href="{{ url_for('orders') }}"><i class="fas fa-list-ul"></i> Orders</a>
                         <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i> Watchlist</a>
                         <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i> Alerts</a>
+                        <a class="nav-link" href="{{ url_for('learning') }}"><i class="fas fa-graduation-cap"></i> Learn</a>
                         <a class="nav-link" href="{{ url_for('backtester') }}"><i class="fas fa-history"></i> Backtester</a>
                         <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-shield-alt"></i> Risk Quiz</a>
                         <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i> Achievements</a>
@@ -1190,38 +1191,207 @@
             {% endif %}
 
             <!-- Price Alert Notifications -->
-            <div class="dashboard-card">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h3><i class="fas fa-bell"></i> Price Alert Notifications</h3>
+            <div class="dashboard-card" style="padding: 15px;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="mb-0"><i class="fas fa-bell"></i> Price Alerts</h5>
                     <form method="POST" action="{{ url_for('refresh_alerts') }}">
-                        <button type="submit" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-sync-alt"></i> Refresh Alerts
+                        <button type="submit" class="btn btn-outline-secondary btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                            <i class="fas fa-sync-alt"></i> Refresh
                         </button>
                     </form>
                 </div>
                 <div id="notificationsContainer">
                     {% if triggered_alerts %}
                         {% for alert in triggered_alerts %}
-                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                                <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #f59e0b;"></i>
-                                <div style="flex: 1;">
-                                    <strong>Alert Triggered!</strong><br>
-                                    {{ alert.coin_id | capitalize }} price is {{ alert.alert_type }} ${{ alert.target_price | round(2) }}
-                                    <small class="d-block text-muted mt-1">{{ alert.triggered_at }}</small>
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert" style="padding: 0.5rem 0.75rem; margin-bottom: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-exclamation-triangle" style="font-size: 18px; color: #f59e0b;"></i>
+                                    <div style="flex: 1; font-size: 0.875rem;">
+                                        <strong>{{ alert.coin_id | capitalize }}</strong> is {{ alert.alert_type }} ${{ alert.target_price | round(2) }}
+                                        <small class="d-block text-muted">{{ alert.triggered_at }}</small>
+                                    </div>
+                                    <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">Trade</a>
+                                    <form method="POST" action="{{ url_for('dismiss_alert', notification_id=alert.id) }}" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">Dismiss</button>
+                                    </form>
                                 </div>
-                                <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary">Trade Now</a>
-                                <form method="POST" action="{{ url_for('dismiss_alert', notification_id=alert.id) }}" style="display:inline;">
-                                    <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
-                                </form>
                             </div>
                         {% endfor %}
                     {% else %}
-                        <div class="empty-state">
-                            <i class="fas fa-bell-slash"></i>
-                            <h4>No Active Alerts</h4>
-                            <p>You don't have any triggered price alerts at the moment.</p>
+                        <div class="text-center py-2">
+                            <small class="text-muted"><i class="fas fa-bell-slash"></i> No active alerts</small>
                         </div>
                     {% endif %}
+                </div>
+            </div>
+
+            <!-- Market Highlights Grid -->
+            <div class="row g-3 mb-4">
+                <!-- Top Gainers -->
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-rocket" style="color: #10b981;"></i> Top Gainers (24h)</h3>
+                        <p class="text-muted small mb-3">💡 <strong>Learning Tip:</strong> High gainers show strong bullish momentum but can be volatile. Always research before investing.</p>
+                        <div class="table-wrapper">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Coin</th>
+                                        <th>Price</th>
+                                        <th>24h Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if top_gainers %}
+                                        {% for coin in top_gainers %}
+                                            <tr>
+                                                <td><strong>{{ coin.name }}</strong> <small class="text-muted">{{ coin.symbol | upper }}</small></td>
+                                                <td>${{ coin.current_price | round(4) }}</td>
+                                                <td class="price-positive">
+                                                    <i class="fas fa-arrow-up"></i> {{ coin.price_change_percentage_24h | round(2) }}%
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Losers -->
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-arrow-trend-down" style="color: #ef4444;"></i> Top Losers (24h)</h3>
+                        <p class="text-muted small mb-3">💡 <strong>Learning Tip:</strong> Losers might indicate bearish sentiment. Consider if it's a buying opportunity or a warning sign.</p>
+                        <div class="table-wrapper">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Coin</th>
+                                        <th>Price</th>
+                                        <th>24h Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if top_losers %}
+                                        {% for coin in top_losers %}
+                                            <tr>
+                                                <td><strong>{{ coin.name }}</strong> <small class="text-muted">{{ coin.symbol | upper }}</small></td>
+                                                <td>${{ coin.current_price | round(4) }}</td>
+                                                <td class="price-negative">
+                                                    <i class="fas fa-arrow-down"></i> {{ coin.price_change_percentage_24h | round(2) }}%
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trending Coins -->
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-fire" style="color: #f59e0b;"></i> Trending Coins</h3>
+                        <p class="text-muted small mb-3">💡 <strong>Learning Tip:</strong> Trending coins have high search interest. Popularity doesn't always equal value.</p>
+                        <div class="table-wrapper">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Coin</th>
+                                        <th>Market Cap Rank</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if trending_coins %}
+                                        {% for item in trending_coins %}
+                                            <tr>
+                                                <td><strong>#{{ loop.index }}</strong></td>
+                                                <td><strong>{{ item.item.name }}</strong> <small class="text-muted">{{ item.item.symbol | upper }}</small></td>
+                                                <td><span class="badge bg-secondary">#{{ item.item.market_cap_rank }}</span></td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- High Volume Coins -->
+                <div class="col-md-6">
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-chart-bar" style="color: #8b5cf6;"></i> Highest Trading Volume</h3>
+                        <p class="text-muted small mb-3">💡 <strong>Learning Tip:</strong> High volume indicates strong market activity and liquidity. Easier to buy/sell.</p>
+                        <div class="table-wrapper">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Coin</th>
+                                        <th>Price</th>
+                                        <th>24h Volume</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if high_volume_coins %}
+                                        {% for coin in high_volume_coins %}
+                                            <tr>
+                                                <td><strong>{{ coin.name }}</strong> <small class="text-muted">{{ coin.symbol | upper }}</small></td>
+                                                <td>${{ coin.current_price | round(2) }}</td>
+                                                <td><span class="badge bg-info">${{ '{:,.0f}'.format(coin.total_volume) }}</span></td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Educational Insights -->
+            <div class="dashboard-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h3><i class="fas fa-graduation-cap"></i> Today's Trading Insights</h3>
+                <div class="row mt-4">
+                    <div class="col-md-3">
+                        <div class="text-center p-3" style="background: rgba(255,255,255,0.1); border-radius: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-lightbulb fa-2x mb-2"></i>
+                            <h5>Diversification</h5>
+                            <p class="small">Don't put all eggs in one basket. Spread investments across multiple assets to reduce risk.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3" style="background: rgba(255,255,255,0.1); border-radius: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-shield-alt fa-2x mb-2"></i>
+                            <h5>Risk Management</h5>
+                            <p class="small">Use stop-loss orders to protect against major losses. Never invest more than you can afford to lose.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3" style="background: rgba(255,255,255,0.1); border-radius: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-chart-line fa-2x mb-2"></i>
+                            <h5>Technical Analysis</h5>
+                            <p class="small">Study price charts, volume, and indicators like MA & RSI to make informed decisions.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3" style="background: rgba(255,255,255,0.1); border-radius: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-clock fa-2x mb-2"></i>
+                            <h5>Long-term Thinking</h5>
+                            <p class="small">Crypto markets are volatile. Consider holding quality assets for the long term to ride out volatility.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1473,6 +1643,803 @@
                     };
                 })();
             </script>
+
+            <!-- Onboarding Tutorial Modal -->
+            {% if show_onboarding %}
+            <div class="modal fade" id="onboardingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content" style="border-radius: 15px; overflow: hidden;">
+                        <div class="modal-body p-0">
+                            <!-- Step 1: Welcome -->
+                            <div class="onboarding-step active" data-step="1">
+                                <div class="text-center p-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                    <i class="fas fa-rocket fa-4x mb-3"></i>
+                                    <h2>Welcome to CoinPrep! 🎉</h2>
+                                    <p class="lead">Your Safe Space to Learn Crypto Trading</p>
+                                    <p>This is a <strong>demo simulator</strong> - No real money involved! Practice trading with virtual currency and learn at your own pace.</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Step 2: What is Crypto -->
+                            <div class="onboarding-step" data-step="2">
+                                <div class="p-5">
+                                    <h3><i class="fas fa-bitcoin text-warning"></i> What is Cryptocurrency?</h3>
+                                    <p class="lead">Think of cryptocurrency as <strong>digital money</strong> that exists only online.</p>
+                                    <ul class="list-group list-group-flush mt-4">
+                                        <li class="list-group-item"><i class="fas fa-check-circle text-success"></i> <strong>No physical coins</strong> - It's all digital</li>
+                                        <li class="list-group-item"><i class="fas fa-check-circle text-success"></i> <strong>Decentralized</strong> - No bank controls it</li>
+                                        <li class="list-group-item"><i class="fas fa-check-circle text-success"></i> <strong>Bitcoin was the first</strong> - Created in 2009</li>
+                                        <li class="list-group-item"><i class="fas fa-check-circle text-success"></i> <strong>Thousands exist now</strong> - Ethereum, BNB, and more</li>
+                                    </ul>
+                                    <div class="alert alert-info mt-4">
+                                        <strong>Simple Example:</strong> Just like you can send an email instead of a letter, cryptocurrency lets you send money digitally without a bank!
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: What is Trading -->
+                            <div class="onboarding-step" data-step="3">
+                                <div class="p-5">
+                                    <h3><i class="fas fa-exchange-alt text-primary"></i> What is Trading?</h3>
+                                    <p class="lead">Trading = <strong>Buying Low, Selling High</strong></p>
+                                    <div class="row mt-4">
+                                        <div class="col-md-6">
+                                            <div class="card border-success">
+                                                <div class="card-body text-center">
+                                                    <i class="fas fa-shopping-cart fa-3x text-success mb-3"></i>
+                                                    <h5>Buy (Going Long)</h5>
+                                                    <p>You <strong>buy</strong> Bitcoin at $50,000</p>
+                                                    <p>Price goes up to $55,000</p>
+                                                    <p class="text-success"><strong>You sell = $5,000 profit! ✅</strong></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card border-danger">
+                                                <div class="card-body text-center">
+                                                    <i class="fas fa-chart-line fa-3x text-danger mb-3"></i>
+                                                    <h5>Risk</h5>
+                                                    <p>You buy Bitcoin at $50,000</p>
+                                                    <p>Price drops to $45,000</p>
+                                                    <p class="text-danger"><strong>You sell = $5,000 loss ❌</strong></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 4: Order Types -->
+                            <div class="onboarding-step" data-step="4">
+                                <div class="p-5">
+                                    <h3><i class="fas fa-list-alt text-info"></i> Types of Orders</h3>
+                                    <div class="accordion mt-4" id="orderTypesAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#marketOrder">
+                                                    <i class="fas fa-bolt text-warning me-2"></i> Market Order - Buy NOW!
+                                                </button>
+                                            </h2>
+                                            <div id="marketOrder" class="accordion-collapse collapse show" data-bs-parent="#orderTypesAccordion">
+                                                <div class="accordion-body">
+                                                    Buys immediately at current price. <strong>Fast but no control over exact price.</strong>
+                                                    <br><em>Example: Bitcoin is $50,000 now, you click "Buy Market" and get it instantly at $50,000 (or close to it).</em>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#limitOrder">
+                                                    <i class="fas fa-clock text-primary me-2"></i> Limit Order - Set Your Price
+                                                </button>
+                                            </h2>
+                                            <div id="limitOrder" class="accordion-collapse collapse" data-bs-parent="#orderTypesAccordion">
+                                                <div class="accordion-body">
+                                                    Only buys when price reaches YOUR target. <strong>More control, but might not execute if price doesn't reach your level.</strong>
+                                                    <br><em>Example: Bitcoin is $50,000 but you set limit at $48,000. Order waits. If price drops to $48,000, it buys automatically!</em>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#stopLoss">
+                                                    <i class="fas fa-shield-alt text-danger me-2"></i> Stop Loss - Protection
+                                                </button>
+                                            </h2>
+                                            <div id="stopLoss" class="accordion-collapse collapse" data-bs-parent="#orderTypesAccordion">
+                                                <div class="accordion-body">
+                                                    Automatically sells if price drops too much. <strong>Protects you from big losses!</strong>
+                                                    <br><em>Example: You bought at $50,000, set stop-loss at $45,000. If price crashes to $45,000, it sells automatically to limit your loss.</em>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 5: Risk Management -->
+                            <div class="onboarding-step" data-step="5">
+                                <div class="p-5">
+                                    <h3><i class="fas fa-shield-alt text-success"></i> Golden Rules of Trading</h3>
+                                    <div class="row mt-4">
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card h-100 border-warning">
+                                                <div class="card-body">
+                                                    <h5><i class="fas fa-exclamation-triangle text-warning"></i> Never Invest More Than You Can Lose</h5>
+                                                    <p class="small">Only use money you're okay with losing. Don't use rent money or savings!</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card h-100 border-info">
+                                                <div class="card-body">
+                                                    <h5><i class="fas fa-layer-group text-info"></i> Diversify</h5>
+                                                    <p class="small">Don't put all money in one coin. Spread it across multiple cryptocurrencies.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card h-100 border-danger">
+                                                <div class="card-body">
+                                                    <h5><i class="fas fa-heart text-danger"></i> Control Emotions</h5>
+                                                    <p class="small">Don't panic sell when price drops. Don't FOMO buy when everyone's buying. Stick to your plan!</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card h-100 border-success">
+                                                <div class="card-body">
+                                                    <h5><i class="fas fa-book text-success"></i> Keep Learning</h5>
+                                                    <p class="small">Markets change. Keep reading, practicing, and improving your skills.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Navigation Buttons -->
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" id="skipTutorial">Skip for Now</button>
+                                <div>
+                                    <span id="stepIndicator" class="me-3 text-muted">Step 1 of 5</span>
+                                    <button type="button" class="btn btn-outline-primary" id="prevStep" disabled>Previous</button>
+                                    <button type="button" class="btn btn-primary" id="nextStep">Next</button>
+                                    <button type="button" class="btn btn-success" id="finishTutorial" style="display:none;">Start Trading! 🚀</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                // Onboarding Modal Logic
+                document.addEventListener('DOMContentLoaded', function() {
+                    const modal = document.getElementById('onboardingModal');
+                    if (modal) {
+                        const bsModal = new bootstrap.Modal(modal);
+                        bsModal.show();
+
+                        let currentStep = 1;
+                        const totalSteps = 5;
+
+                        function showStep(step) {
+                            document.querySelectorAll('.onboarding-step').forEach(el => el.classList.remove('active'));
+                            document.querySelector(`.onboarding-step[data-step="${step}"]`).classList.add('active');
+                            
+                            document.getElementById('stepIndicator').textContent = `Step ${step} of ${totalSteps}`;
+                            document.getElementById('prevStep').disabled = step === 1;
+                            document.getElementById('nextStep').style.display = step === totalSteps ? 'none' : 'inline-block';
+                            document.getElementById('finishTutorial').style.display = step === totalSteps ? 'inline-block' : 'none';
+                        }
+
+                        document.getElementById('nextStep').addEventListener('click', function() {
+                            if (currentStep < totalSteps) {
+                                currentStep++;
+                                showStep(currentStep);
+                            }
+                        });
+
+                        document.getElementById('prevStep').addEventListener('click', function() {
+                            if (currentStep > 1) {
+                                currentStep--;
+                                showStep(currentStep);
+                            }
+                        });
+
+                        document.getElementById('skipTutorial').addEventListener('click', function() {
+                            fetch('/skip_onboarding', { method: 'POST' })
+                                .then(() => bsModal.hide());
+                        });
+
+                        document.getElementById('finishTutorial').addEventListener('click', function() {
+                            fetch('/skip_onboarding', { method: 'POST' })
+                                .then(() => {
+                                    bsModal.hide();
+                                    alert('🎉 Great job! You can always revisit the lessons in the "Learn" section from the top menu.');
+                                });
+                        });
+                    }
+                });
+            </script>
+
+            <style>
+                .onboarding-step {
+                    display: none;
+                }
+                .onboarding-step.active {
+                    display: block;
+                }
+            </style>
+            {% endif %}
+        </div>
+
+    {% elif section == 'learning' %}
+        <div class="container">
+            <nav class="navbar navbar-expand-lg">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i> CoinPrep Learning Hub</a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="{{ url_for('dashboard') }}"><i class="fas fa-home"></i> Dashboard</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                </div>
+            </nav>
+
+            <!-- Progress Banner -->
+            <div class="dashboard-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2><i class="fas fa-graduation-cap"></i> Your Learning Journey</h2>
+                        <p class="mb-0">Complete all 7 lessons to master crypto trading basics!</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="progress" style="height: 30px; background: rgba(255,255,255,0.3);">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ (user_progress.lessons_completed|length / 7 * 100)|round }}%;" id="progressBar">
+                                <strong>{{ user_progress.lessons_completed|length }}/7 Complete</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lesson Cards -->
+            <div class="row g-4">
+                <!-- Lesson 1: What is Crypto -->
+                <div class="col-md-6">
+                    <div class="dashboard-card lesson-card {% if 'lesson1' in user_progress.lessons_completed %}completed{% endif %}" data-lesson="lesson1">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h4><i class="fas fa-bitcoin text-warning"></i> Lesson 1: What is Cryptocurrency?</h4>
+                            <span class="badge bg-success completion-badge" style="display: {% if 'lesson1' in user_progress.lessons_completed %}inline{% else %}none{% endif %};">✓ Done</span>
+                        </div>
+                        <p class="text-muted">Learn the basics of digital currency and how it works</p>
+                        <button class="btn btn-primary btn-sm" onclick="showLesson('lesson1')">
+                            {% if 'lesson1' in user_progress.lessons_completed %}Review{% else %}Start Lesson{% endif %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lesson 2: Trading Basics -->
+                <div class="col-md-6">
+                    <div class="dashboard-card lesson-card {% if 'lesson2' in user_progress.lessons_completed %}completed{% endif %}" data-lesson="lesson2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h4><i class="fas fa-exchange-alt text-primary"></i> Lesson 2: What is Trading?</h4>
+                            <span class="badge bg-success completion-badge" style="display: {% if 'lesson2' in user_progress.lessons_completed %}inline{% else %}none{% endif %};">✓ Done</span>
+                        </div>
+                        <p class="text-muted">Understand buying, selling, and making profits</p>
+                        <button class="btn btn-primary btn-sm" onclick="showLesson('lesson2')">
+                            {% if 'lesson2' in user_progress.lessons_completed %}Review{% else %}Start Lesson{% endif %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lesson 3: Trading Pairs -->
+                <div class="col-md-6">
+                    <div class="dashboard-card lesson-card {% if 'lesson3' in user_progress.lessons_completed %}completed{% endif %}" data-lesson="lesson3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h4><i class="fas fa-link text-info"></i> Lesson 3: Trading Pairs</h4>
+                            <span class="badge bg-success completion-badge" style="display: {% if 'lesson3' in user_progress.lessons_completed %}inline{% else %}none{% endif %};">✓ Done</span>
+                        </div>
+                        <p class="text-muted">Learn BTC/USDT, ETH/USD and how pairs work</p>
+                        <button class="btn btn-primary btn-sm" onclick="showLesson('lesson3')">
+                            {% if 'lesson3' in user_progress.lessons_completed %}Review{% else %}Start Lesson{% endif %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lesson 4: Order Types -->
+                <div class="col-md-6">
+                    <div class="dashboard-card lesson-card {% if 'lesson4' in user_progress.lessons_completed %}completed{% endif %}" data-lesson="lesson4">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h4><i class="fas fa-list-alt text-success"></i> Lesson 4: Market vs Limit Orders</h4>
+                            <span class="badge bg-success completion-badge" style="display: {% if 'lesson4' in user_progress.lessons_completed %}inline{% else %}none{% endif %};">✓ Done</span>
+                        </div>
+                        <p class="text-muted">Master different order types and when to use them</p>
+                        <button class="btn btn-primary btn-sm" onclick="showLesson('lesson4')">
+                            {% if 'lesson4' in user_progress.lessons_completed %}Review{% else %}Start Lesson{% endif %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lesson 5: Stop Loss -->
+                <div class="col-md-6">
+                    <div class="dashboard-card lesson-card {% if 'lesson5' in user_progress.lessons_completed %}completed{% endif %}" data-lesson="lesson5">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h4><i class="fas fa-shield-alt text-danger"></i> Lesson 5: Stop Loss & Take Profit</h4>
+                            <span class="badge bg-success completion-badge" style="display: {% if 'lesson5' in user_progress.lessons_completed %}inline{% else %}none{% endif %};">✓ Done</span>
+                        </div>
+                        <p class="text-muted">Protect your investments with smart risk tools</p>
+                        <button class="btn btn-primary btn-sm" onclick="showLesson('lesson5')">
+                            {% if 'lesson5' in user_progress.lessons_completed %}Review{% else %}Start Lesson{% endif %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lesson 6: Risk Management -->
+                <div class="col-md-6">
+                    <div class="dashboard-card lesson-card {% if 'lesson6' in user_progress.lessons_completed %}completed{% endif %}" data-lesson="lesson6">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h4><i class="fas fa-balance-scale text-warning"></i> Lesson 6: Risk Management</h4>
+                            <span class="badge bg-success completion-badge" style="display: {% if 'lesson6' in user_progress.lessons_completed %}inline{% else %}none{% endif %};">✓ Done</span>
+                        </div>
+                        <p class="text-muted">Learn to manage risk and position sizing</p>
+                        <button class="btn btn-primary btn-sm" onclick="showLesson('lesson6')">
+                            {% if 'lesson6' in user_progress.lessons_completed %}Review{% else %}Start Lesson{% endif %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lesson 7: Psychology -->
+                <div class="col-md-6">
+                    <div class="dashboard-card lesson-card {% if 'lesson7' in user_progress.lessons_completed %}completed{% endif %}" data-lesson="lesson7">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h4><i class="fas fa-brain text-purple"></i> Lesson 7: Trading Psychology</h4>
+                            <span class="badge bg-success completion-badge" style="display: {% if 'lesson7' in user_progress.lessons_completed %}inline{% else %}none{% endif %};">✓ Done</span>
+                        </div>
+                        <p class="text-muted">Master your emotions and avoid common mistakes</p>
+                        <button class="btn btn-primary btn-sm" onclick="showLesson('lesson7')">
+                            {% if 'lesson7' in user_progress.lessons_completed %}Review{% else %}Start Lesson{% endif %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lesson Modal -->
+            <div class="modal fade" id="lessonModal" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="lessonTitle"></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body" id="lessonContent"></div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-success" id="completeLessonBtn">Mark as Complete ✓</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                const lessonContent = {
+                    lesson1: {
+                        title: 'What is Cryptocurrency?',
+                        content: `
+                            <h4>🪙 Digital Money</h4>
+                            <p>Cryptocurrency is <strong>digital money</strong> that exists only on the internet - no paper bills or metal coins!</p>
+                            
+                            <h5 class="mt-4">Key Concepts:</h5>
+                            <ul>
+                                <li><strong>Blockchain:</strong> Think of it like a digital ledger (notebook) that records every transaction. Everyone can see it, but no one can change past records.</li>
+                                <li><strong>Decentralized:</strong> No single company or government controls it. It's like the internet - belongs to everyone!</li>
+                                <li><strong>Bitcoin (BTC):</strong> The first and most famous cryptocurrency. Like digital gold.</li>
+                                <li><strong>Ethereum (ETH):</strong> Second biggest. Can run "smart contracts" (automatic agreements).</li>
+                                <li><strong>Altcoins:</strong> All other cryptocurrencies besides Bitcoin.</li>
+                            </ul>
+
+                            <div class="alert alert-info mt-4">
+                                <h6><i class="fas fa-lightbulb"></i> Real World Example:</h6>
+                                <p>Imagine sending money to a friend overseas:</p>
+                                <p><strong>Traditional way:</strong> Bank transfer takes 3-5 days, charges fees, bank controls it</p>
+                                <p><strong>Crypto way:</strong> Send Bitcoin in 10-30 minutes, lower fees, no middleman!</p>
+                            </div>
+
+                            <h5 class="mt-4">Quick Quiz:</h5>
+                            <div class="card bg-light p-3">
+                                <p><strong>Q: What makes cryptocurrency different from regular money?</strong></p>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="quiz1" id="quiz1a">
+                                    <label class="form-check-label" for="quiz1a">A) It's controlled by banks</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="quiz1" id="quiz1b">
+                                    <label class="form-check-label" for="quiz1b">B) It's digital and decentralized ✓</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="quiz1" id="quiz1c">
+                                    <label class="form-check-label" for="quiz1c">C) It exists as physical coins</label>
+                                </div>
+                            </div>
+                        `
+                    },
+                    lesson2: {
+                        title: 'What is Trading?',
+                        content: `
+                            <h4>📈 Buy Low, Sell High</h4>
+                            <p>Trading is about making profit from price changes. Simple concept: buy something cheap, sell it expensive!</p>
+                            
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body">
+                                            <h5 class="text-success"><i class="fas fa-check-circle"></i> Profitable Trade</h5>
+                                            <ol>
+                                                <li>You buy 1 Bitcoin at $40,000</li>
+                                                <li>Price goes up to $45,000</li>
+                                                <li>You sell for $45,000</li>
+                                                <li><strong>Profit: $5,000! 🎉</strong></li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-danger">
+                                        <div class="card-body">
+                                            <h5 class="text-danger"><i class="fas fa-times-circle"></i> Loss Trade</h5>
+                                            <ol>
+                                                <li>You buy 1 Bitcoin at $40,000</li>
+                                                <li>Price drops to $35,000</li>
+                                                <li>You panic and sell at $35,000</li>
+                                                <li><strong>Loss: -$5,000 😢</strong></li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h5 class="mt-4">Types of Traders:</h5>
+                            <ul>
+                                <li><strong>Day Trader:</strong> Buys and sells within the same day. Very active!</li>
+                                <li><strong>Swing Trader:</strong> Holds for days or weeks. Medium term.</li>
+                                <li><strong>HODLer:</strong> Buys and holds for months/years. Long-term investor.</li>
+                            </ul>
+
+                            <div class="alert alert-warning mt-4">
+                                <h6><i class="fas fa-exclamation-triangle"></i> Remember:</h6>
+                                <p>Crypto prices are <strong>very volatile</strong> (change a lot). You can make OR lose money quickly. That's why this is a simulator - to practice safely!</p>
+                            </div>
+                        `
+                    },
+                    lesson3: {
+                        title: 'Trading Pairs',
+                        content: `
+                            <h4>🔗 Understanding Trading Pairs</h4>
+                            <p>A trading pair shows two currencies being exchanged. Format: <strong>BASE/QUOTE</strong></p>
+                            
+                            <h5 class="mt-4">Common Examples:</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card bg-light mb-3">
+                                        <div class="card-body">
+                                            <h6><strong>BTC/USDT</strong></h6>
+                                            <p>Bitcoin (BTC) priced in Tether (USDT - a stablecoin worth ~$1)</p>
+                                            <p class="text-muted small">If BTC/USDT = 50,000, it means 1 Bitcoin costs 50,000 USDT (~$50,000)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card bg-light mb-3">
+                                        <div class="card-body">
+                                            <h6><strong>ETH/BTC</strong></h6>
+                                            <p>Ethereum (ETH) priced in Bitcoin (BTC)</p>
+                                            <p class="text-muted small">If ETH/BTC = 0.05, it means 1 Ethereum costs 0.05 Bitcoin</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h5 class="mt-4">Why Pairs Matter:</h5>
+                            <ul>
+                                <li><strong>Choose your risk:</strong> BTC/USDT is stable (priced in dollars). BTC/ETH is more volatile.</li>
+                                <li><strong>Different strategies:</strong> Trade crypto-to-crypto or crypto-to-stablecoin</li>
+                                <li><strong>Price differences:</strong> Same coin can have different prices in different pairs!</li>
+                            </ul>
+
+                            <div class="alert alert-info mt-4">
+                                <h6><i class="fas fa-lightbulb"></i> Pro Tip:</h6>
+                                <p>For beginners, trade with <strong>USDT or USD pairs</strong> first. They're easier to understand because prices are in dollars!</p>
+                            </div>
+                        `
+                    },
+                    lesson4: {
+                        title: 'Market vs Limit Orders',
+                        content: `
+                            <h4>⚡ Market Order: Buy/Sell NOW!</h4>
+                            <div class="card bg-primary text-white mb-4">
+                                <div class="card-body">
+                                    <h5>Market Order</h5>
+                                    <p><strong>Executes immediately</strong> at the current best available price</p>
+                                    <p><strong>✅ Pros:</strong> Fast, guaranteed execution</p>
+                                    <p><strong>❌ Cons:</strong> Price might slip (you pay a bit more or get a bit less)</p>
+                                    <p class="mb-0"><strong>Use when:</strong> You want to buy/sell RIGHT NOW and don't care about exact price</p>
+                                </div>
+                            </div>
+
+                            <h4>🎯 Limit Order: Set Your Price!</h4>
+                            <div class="card bg-success text-white mb-4">
+                                <div class="card-body">
+                                    <h5>Limit Order</h5>
+                                    <p><strong>Only executes</strong> when price reaches YOUR specified level</p>
+                                    <p><strong>✅ Pros:</strong> Full control over price, potentially better deals</p>
+                                    <p><strong>❌ Cons:</strong> Might not execute if price doesn't reach your level</p>
+                                    <p class="mb-0"><strong>Use when:</strong> You want a specific price and can wait</p>
+                                </div>
+                            </div>
+
+                            <h5>Example Scenario:</h5>
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <p><strong>Current Bitcoin Price: $50,000</strong></p>
+                                    <hr>
+                                    <p><strong>Market Order:</strong> Click "Buy Market" → You get Bitcoin at ~$50,000 instantly</p>
+                                    <p><strong>Limit Order:</strong> Set limit at $48,000 → Order waits. If price drops to $48,000, you buy automatically. If not, no trade happens.</p>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-warning mt-4">
+                                <strong>Beginner Tip:</strong> Start with small market orders to practice. Once comfortable, try limit orders for better prices!
+                            </div>
+                        `
+                    },
+                    lesson5: {
+                        title: 'Stop Loss & Take Profit',
+                        content: `
+                            <h4>🛡️ Stop Loss: Your Safety Net</h4>
+                            <p>A Stop Loss automatically <strong>sells your position</strong> if the price drops to a certain level. It protects you from big losses!</p>
+                            
+                            <div class="card border-danger mb-4">
+                                <div class="card-body">
+                                    <h5 class="text-danger">Stop Loss Example:</h5>
+                                    <ol>
+                                        <li>You buy Bitcoin at $50,000</li>
+                                        <li>You set stop loss at $45,000 (10% below)</li>
+                                        <li>Price drops to $45,000</li>
+                                        <li><strong>Automatically sells!</strong> You lose $5,000, but it stops there</li>
+                                        <li>Price keeps dropping to $30,000 - but you're already out! You avoided bigger loss! ✅</li>
+                                    </ol>
+                                </div>
+                            </div>
+
+                            <h4>🎯 Take Profit: Lock in Gains</h4>
+                            <p>Take Profit automatically <strong>sells when price goes UP</strong> to your target. It secures your profits!</p>
+                            
+                            <div class="card border-success mb-4">
+                                <div class="card-body">
+                                    <h5 class="text-success">Take Profit Example:</h5>
+                                    <ol>
+                                        <li>You buy Bitcoin at $50,000</li>
+                                        <li>You set take profit at $55,000 (10% above)</li>
+                                        <li>Price rises to $55,000</li>
+                                        <li><strong>Automatically sells!</strong> You made $5,000 profit! 🎉</li>
+                                        <li>You don't have to watch the market 24/7!</li>
+                                    </ol>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info mt-4">
+                                <h6><i class="fas fa-lightbulb"></i> Pro Strategy:</h6>
+                                <p>Use BOTH together! Set stop loss at -10% and take profit at +20%. This gives you a good risk/reward ratio!</p>
+                                <p><strong>Risk:</strong> Lose $1,000 | <strong>Reward:</strong> Win $2,000 → Good trade!</p>
+                            </div>
+
+                            <div class="alert alert-warning">
+                                <strong>Remember:</strong> Always set a stop loss! It's like wearing a seatbelt - you hope you don't need it, but you're glad it's there!
+                            </div>
+                        `
+                    },
+                    lesson6: {
+                        title: 'Risk Management',
+                        content: `
+                            <h4>⚖️ The Golden Rules of Risk Management</h4>
+                            
+                            <h5>1. The 1-2% Rule</h5>
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <p><strong>Never risk more than 1-2% of your total capital on a single trade!</strong></p>
+                                    <p>Example: If you have $10,000:</p>
+                                    <ul>
+                                        <li>Maximum risk per trade: $100-200</li>
+                                        <li>This means even 10 losing trades in a row = still 90%+ of capital left</li>
+                                        <li>You can stay in the game!</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <h5>2. Position Sizing</h5>
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <p><strong>Don't put all your money in one cryptocurrency!</strong></p>
+                                    <p>Good diversification:</p>
+                                    <ul>
+                                        <li>40% in Bitcoin (most stable)</li>
+                                        <li>30% in Ethereum (second biggest)</li>
+                                        <li>20% in 2-3 other established coins</li>
+                                        <li>10% in smaller/riskier coins (if you want)</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <h5>3. Risk/Reward Ratio</h5>
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <p><strong>Aim for at least 1:2 risk/reward ratio</strong></p>
+                                    <p>Example:</p>
+                                    <ul>
+                                        <li>Risk: $100 (with stop loss)</li>
+                                        <li>Potential Reward: $200+ (with take profit)</li>
+                                        <li>This means you only need to win 35-40% of trades to be profitable!</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <h5>4. Never Chase Losses</h5>
+                            <div class="alert alert-danger">
+                                <h6><i class="fas fa-exclamation-triangle"></i> WARNING!</h6>
+                                <p><strong>Emotional mistake:</strong> You lose money, then immediately make bigger trades to "win it back"</p>
+                                <p><strong>Result:</strong> Usually lose even MORE money!</p>
+                                <p><strong>Solution:</strong> Take a break. Stick to your plan. Small consistent wins beat big emotional bets!</p>
+                            </div>
+
+                            <div class="alert alert-success mt-4">
+                                <h6>Remember:</h6>
+                                <p><strong>Good traders protect their capital first, make profits second!</strong></p>
+                                <p>It's better to make small consistent gains than to risk everything for one big win.</p>
+                            </div>
+                        `
+                    },
+                    lesson7: {
+                        title: 'Trading Psychology',
+                        content: `
+                            <h4>🧠 Master Your Mind, Master Trading</h4>
+                            <p>Technical skills are only 30% of trading. Psychology is 70%! Let's learn to control emotions.</p>
+                            
+                            <h5>Common Emotional Mistakes:</h5>
+                            
+                            <div class="card border-danger mb-3">
+                                <div class="card-body">
+                                    <h6 class="text-danger">😱 Fear (Panic Selling)</h6>
+                                    <p><strong>What happens:</strong> Price drops 5%, you panic and sell at a loss</p>
+                                    <p><strong>Solution:</strong> Set stop losses in advance. Trust your plan. Small dips are normal!</p>
+                                </div>
+                            </div>
+
+                            <div class="card border-warning mb-3">
+                                <div class="card-body">
+                                    <h6 class="text-warning">😤 Greed (FOMO - Fear Of Missing Out)</h6>
+                                    <p><strong>What happens:</strong> Everyone's buying, prices shooting up, you buy at the peak. Then it crashes.</p>
+                                    <p><strong>Solution:</strong> Stick to your analysis. If you missed a rally, there will be another one. Patience!</p>
+                                </div>
+                            </div>
+
+                            <div class="card border-info mb-3">
+                                <div class="card-body">
+                                    <h6 class="text-info">😔 Revenge Trading</h6>
+                                    <p><strong>What happens:</strong> You lose money, get angry, make bigger reckless trades to "win it back"</p>
+                                    <p><strong>Solution:</strong> Take a break after losses. Come back calm. Follow your system!</p>
+                                </div>
+                            </div>
+
+                            <h5 class="mt-4">5 Mental Rules for Success:</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card bg-light mb-3">
+                                        <div class="card-body">
+                                            <h6>1. Have a Trading Plan</h6>
+                                            <p class="small">Write down your strategy BEFORE trading. When to buy, when to sell, how much risk.</p>
+                                        </div>
+                                    </div>
+                                    <div class="card bg-light mb-3">
+                                        <div class="card-body">
+                                            <h6>2. Accept Losses</h6>
+                                            <p class="small">Even pro traders lose 40-50% of trades. It's normal! Focus on overall profit.</p>
+                                        </div>
+                                    </div>
+                                    <div class="card bg-light mb-3">
+                                        <div class="card-body">
+                                            <h6>3. Keep a Trading Journal</h6>
+                                            <p class="small">Write down every trade. What did you do right? Wrong? Learn from it!</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card bg-light mb-3">
+                                        <div class="card-body">
+                                            <h6>4. Take Breaks</h6>
+                                            <p class="small">Don't stare at charts 24/7. Set alerts, walk away, live your life!</p>
+                                        </div>
+                                    </div>
+                                    <div class="card bg-light mb-3">
+                                        <div class="card-body">
+                                            <h6>5. Start Small</h6>
+                                            <p class="small">Use this simulator to practice. When ready for real money, start with amounts you can afford to lose.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-success mt-4">
+                                <h6><i class="fas fa-trophy"></i> Final Wisdom:</h6>
+                                <p><strong>"The market will always be there. Your capital won't if you don't protect it."</strong></p>
+                                <p>Trade smart, stay disciplined, control emotions = Long-term success! 🚀</p>
+                            </div>
+                        `
+                    }
+                };
+
+                function showLesson(lessonId) {
+                    const lesson = lessonContent[lessonId];
+                    if (!lesson) return;
+
+                    document.getElementById('lessonTitle').innerHTML = lesson.title;
+                    document.getElementById('lessonContent').innerHTML = lesson.content;
+                    document.getElementById('completeLessonBtn').setAttribute('data-lesson', lessonId);
+
+                    const modal = new bootstrap.Modal(document.getElementById('lessonModal'));
+                    modal.show();
+                }
+
+                document.getElementById('completeLessonBtn').addEventListener('click', function() {
+                    const lessonId = this.getAttribute('data-lesson');
+                    
+                    fetch('/complete_lesson', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lesson_id: lessonId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Update UI
+                            const card = document.querySelector(`[data-lesson="${lessonId}"]`);
+                            card.classList.add('completed');
+                            card.querySelector('.completion-badge').style.display = 'inline';
+                            card.querySelector('button').textContent = 'Review';
+                            
+                            // Update progress bar
+                            const progress = (data.completed_count / 7 * 100);
+                            document.getElementById('progressBar').style.width = progress + '%';
+                            document.getElementById('progressBar').innerHTML = `<strong>${data.completed_count}/7 Complete</strong>`;
+                            
+                            // Close modal and show congrats
+                            bootstrap.Modal.getInstance(document.getElementById('lessonModal')).hide();
+                            
+                            if (data.completed_count === 7) {
+                                alert('🎉 Congratulations! You\'ve completed all lessons! You\'re ready to start trading!');
+                            } else {
+                                alert('✅ Lesson completed! Keep going!');
+                            }
+                        }
+                    });
+                });
+            </script>
+
+            <style>
+                .lesson-card {
+                    transition: transform 0.2s, box-shadow 0.2s;
+                    border-left: 4px solid #ddd;
+                }
+                .lesson-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }
+                .lesson-card.completed {
+                    border-left-color: #10b981;
+                    background: #f0fdf4;
+                }
+                .text-purple {
+                    color: #8b5cf6;
+                }
+            </style>
         </div>
 
     {% elif section == 'live_market' %}
