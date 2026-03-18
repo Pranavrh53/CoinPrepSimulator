@@ -972,6 +972,7 @@ def dashboard():
     conn = get_db_connection()
     user = None
     triggered_alerts = []
+    sold_transactions = []
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
@@ -1003,13 +1004,38 @@ def dashboard():
                             if match:
                                 notification['target_price'] = float(match.group(1))
                         triggered_alerts.append(notification)
+
+            # Archived trades shown on dashboard right panel
+            cursor.execute(
+                """
+                SELECT wallet_id, coin_id, amount, price, sold_price
+                FROM transactions
+                WHERE user_id = %s AND type = 'sell'
+                ORDER BY id DESC
+                LIMIT 12
+                """,
+                (session['user_id'],)
+            )
+            sold_transactions = cursor.fetchall()
+            for tx in sold_transactions:
+                tx['price'] = float(tx.get('price') or 0)
+                tx['sold_price'] = float(tx.get('sold_price') or 0)
+                tx['amount'] = float(tx.get('amount') or 0)
+                tx['profit'] = round((tx['sold_price'] - tx['price']) * tx['amount'], 2)
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='dashboard', coins=coins, user=user, triggered_alerts=triggered_alerts)
+    return render_template(
+        'combined.html',
+        section='dashboard',
+        coins=coins,
+        user=user,
+        triggered_alerts=triggered_alerts,
+        sold_transactions=sold_transactions
+    )
 
 @app.route('/dismiss_alert/<int:notification_id>', methods=['POST'])
 def dismiss_alert(notification_id):

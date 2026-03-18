@@ -404,7 +404,7 @@ class AIAssistant:
         """
         Phase 1: Before Trade → Decision Help
         AI-powered trade advisor that analyzes market conditions and gives
-        BUY / WAIT / BUY WITH CAUTION decisions personalized to user's risk level.
+        BUY / WAIT / AVOID decisions personalized to user's risk level.
         
         Args:
             user_id: User ID for personalization
@@ -440,10 +440,12 @@ class AIAssistant:
             print(f"Error fetching user risk: {e}")
         
         # 2. Fetch historical market data for technical analysis
+        coin_display = coin_id.replace("-", " ").title()
         rsi = 50.0  # defaults
         ma10 = current_price
         ma50 = current_price
         prediction = 50.0
+        recent_prices = []
         
         try:
             # Fetch 60 days of data for MA50 calculation
@@ -452,6 +454,7 @@ class AIAssistant:
             if resp.status_code == 200:
                 data = resp.json()
                 prices = [p[1] for p in data.get('prices', [])]
+                recent_prices = prices
                 
                 if len(prices) >= 14:
                     # Calculate RSI (14-period)
@@ -473,71 +476,107 @@ class AIAssistant:
                     prediction = max(10, min(90, 50 + recent_trend * 2 + rsi_factor * 20 + ma_factor * 10))
         except Exception as e:
             print(f"Error calculating technical indicators: {e}")
+
+        market_context = self._analyze_recent_market_behavior(
+            coin_id=coin_id,
+            coin_name=coin_display,
+            prices=recent_prices,
+            current_price=current_price,
+            price_change_24h=price_change_24h,
+            ma10=ma10,
+            ma50=ma50
+        )
         
-        # 3. Search knowledge base for relevant trading context
+        # 3. Keep lightweight knowledge retrieval for logging/source context
         search_query = f"trading strategy {coin_id} risk management buy sell decision"
         relevant_docs = self._search_knowledge(search_query, n_results=2)
-        knowledge_context = self._format_docs_for_prompt(relevant_docs)
-        
-        # 4. Build the trade advisor prompt — educational, coin-specific, beginner-focused
-        coin_display = coin_id.replace("-", " ").title()
-        rsi_zone = "overbought" if rsi >= 70 else ("oversold" if rsi <= 30 else "neutral")
-        trend_word = "bullish (upward)" if ma10 > ma50 else "bearish (downward)"
-        ma_gap_pct = abs(ma10 - ma50) / ma50 * 100 if ma50 > 0 else 0
 
-        prompt = f"""You are CoinPrep's AI trading mentor. Your job is to TEACH beginner traders by explaining what each market signal means in plain English — not just what to do, but WHY.
+        # 4. Build the trade advisor prompt - behavior-first, coin-specific, beginner-focused
+        key_events_text = "\n".join(f"- {evt}" for evt in market_context['key_events'])
+        prompt = f"""You are an expert crypto trading mentor analyzing real market behavior for a beginner.
 
-=== TRADE SCENARIO ===
-Coin: {coin_display} ({coin_id})
-Current Price: ${current_price:,.4f}
-24h Change: {price_change_24h:+.2f}%
-RSI (14-period): {rsi:.1f} → Zone: {rsi_zone}
-10-Day Moving Average: ${ma10:,.4f}
-50-Day Moving Average: ${ma50:,.4f}
-Trend Direction: {trend_word} (MA gap: {ma_gap_pct:.2f}%)
-AI Price Prediction: {prediction:.1f}% chance price rises short-term
-User Risk Level: {risk_level.upper()}
+Your goal is to THINK like a trader, not describe indicators.
 
-=== EDUCATIONAL KNOWLEDGE ===
-{knowledge_context}
+IMPORTANT RULES:
+- Do NOT repeat generic phrases like "market is sideways" without explaining WHY
+- Do NOT mention RSI/MA unless used in reasoning
+- Focus on telling a clear MARKET STORY
+- Be decisive and practical
 
-=== INSTRUCTIONS ===
-1. Make a decision: BUY, WAIT, or BUY WITH CAUTION — based on ALL indicators AND the {risk_level} risk profile.
-   - LOW risk: prefer WAIT unless signals are strongly aligned
-   - MEDIUM risk: can enter with moderate signal alignment
-   - HIGH risk: willing to enter on partial signals
+-------------------------------------
 
-2. For each reasoning point, explain the indicator using PLAIN ENGLISH with the actual numbers — imagine explaining to someone who has NEVER seen a chart. Use analogies. Make it specific to {coin_display}.
-   - Do NOT say "RSI is 51". Instead say something like: "RSI of 51 means roughly equal buying and selling pressure — the market for {coin_display} isn't showing panic OR excitement right now."
-   - Do NOT say "MA10 > MA50". Instead explain what this means in terms the beginner can understand.
+User Profile:
+- Risk Level: {risk_level}
+- Experience: Beginner
 
-3. Give a specific Risk Warning based on the actual current numbers.
-4. Give ONE concrete actionable Beginner Tip — something the user can do RIGHT NOW.
+Coin: {coin_display}
 
-IMPORTANT: This is a simulator with fake money. NOT financial advice.
+-------------------------------------
 
-Respond in this EXACT format:
+Recent Market Behavior:
+{market_context['market_summary']}
 
-Decision: <BUY / WAIT / BUY WITH CAUTION>
+Key Events:
+{key_events_text}
 
-Confidence: <Low / Medium / High>
+AI Prediction:
+{prediction:.1f}% probability of price increase
 
-Key Reasoning:
-- <Plain-English explanation of RSI {rsi:.1f} — what this number means for buyer vs seller pressure on {coin_display} right now>
-- <Plain-English explanation of MA10 vs MA50 — what the {trend_word} trend and {ma_gap_pct:.2f}% gap tells us>
-- <Plain-English explanation of prediction {prediction:.1f}% combined with {price_change_24h:+.2f}% 24h move — what short-term momentum looks like>
+-------------------------------------
 
-Why Consider Buying:
-- <1-2 strongest bullish reasons based on current numbers>
+Task:
 
-Why Not Buy Yet:
-- <1-2 strongest bearish/caution reasons based on current numbers>
+1. First, identify the MARKET STORY:
+    - What just happened? (drop, pump, consolidation)
+    - What is happening NOW? (holding support, breaking down, recovering)
 
-Risk Warning:
-- <Specific risk based on actual numbers: e.g. if RSI near 70 warn about reversal, if price surged 10%+ in 24h warn of correction, if prediction < 50% warn of downside>
+2. Then make a STRONG DECISION:
+    - BUY -> only if clear opportunity
+    - WAIT -> if setup is forming but not confirmed
+    - AVOID -> if conditions are unfavorable
+
+3. Your reasoning MUST:
+    - Clearly explain WHY the decision is taken
+    - Mention cause-effect (e.g., drop -> support -> possible bounce)
+    - Avoid vague words like "sideways" without explanation
+
+4. Add a TRIGGER CONDITION:
+    - Tell the user EXACTLY what to wait for
+    (example: "Buy only if price breaks above X")
+
+5. Make it feel SPECIFIC and SITUATIONAL, not generic
+
+-------------------------------------
+
+Output Format:
+
+Decision: (BUY / WAIT / AVOID)
+
+Market Story:
+(Explain what happened and what is happening now in a clear narrative)
+
+Why This Decision:
+- Bullet 1 (cause-effect reasoning)
+- Bullet 2 (risk or trend insight)
+- Bullet 3 (prediction or confirmation logic)
+
+What To Watch (IMPORTANT):
+(1 clear actionable trigger like breakout, higher low, etc.)
+
+Timing Insight:
+(Early / Late / Risky / Good - with explanation)
+
+Confidence:
+(Low / Medium / High)
 
 Beginner Tip:
-- <One concrete action: e.g. 'Set a stop-loss 5% below buy price', 'Wait for RSI to drop below 45', 'Start with 5% of your portfolio max'>"""
+(Practical, not generic)
+
+-------------------------------------
+
+STRICT:
+- Avoid generic repeated phrases
+- Make each response feel unique to the coin's behavior"""
         
         # 5. Query AI
         ai_available = True
@@ -548,13 +587,13 @@ Beginner Tip:
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=1024,
                     temperature=0.6,
-                    system="You are an expert crypto trading mentor for a SIMULATOR app. Give clear, structured advice. Always follow the output format exactly.",
+                    system="You are an expert crypto trading mentor for a simulator app. Focus on real recent market behavior and coin-specific context. Avoid generic indicator explanations and follow the output format exactly.",
                     messages=[{"role": "user", "content": prompt}]
                 )
                 ai_response = response.content[0].text
                 
             elif self.provider == "gemini":
-                system_prompt = "You are an expert crypto trading mentor for a SIMULATOR app. Give clear, structured advice. Always follow the output format exactly."
+                system_prompt = "You are an expert crypto trading mentor for a simulator app. Focus on real recent market behavior and coin-specific context. Avoid generic indicator explanations and follow the output format exactly."
                 full_prompt = f"{system_prompt}\n\n{prompt}"
                 ai_response = self._generate_gemini(
                     prompt=full_prompt,
@@ -579,6 +618,10 @@ Beginner Tip:
                 ma50=ma50,
                 prediction=prediction,
                 price_change_24h=price_change_24h,
+                market_summary=market_context['market_summary'],
+                key_events=market_context['key_events'],
+                trend=market_context['trend'],
+                volatility_level=market_context['volatility_level'],
                 error=str(e)
             )
         
@@ -618,7 +661,10 @@ Beginner Tip:
                 "ma50": round(ma50, 2),
                 "price_change": price_change_24h,
                 "prediction": round(prediction, 1),
-                "trend": "Bullish" if ma10 > ma50 else "Bearish",
+                "trend": market_context['trend'],
+                "volatility_level": market_context['volatility_level'],
+                "market_summary": market_context['market_summary'],
+                "key_events": market_context['key_events'],
                 "signal_scores": signal_scores
             },
             "user_risk_level": risk_level,
@@ -653,7 +699,10 @@ Beginner Tip:
         parsed = {
             "decision": "WAIT",
             "confidence": "Medium",
+            "market_situation": "",
             "reasoning": [],
+            "what_to_watch": "",
+            "timing_insight": "",
             "why_buy": [],
             "why_not_buy": [],
             "risk_warning": "",
@@ -671,9 +720,9 @@ Beginner Tip:
             # Parse Decision
             if line.lower().startswith('decision:'):
                 decision = line.split(':', 1)[1].strip().upper()
-                if 'BUY WITH CAUTION' in decision:
-                    parsed['decision'] = 'BUY WITH CAUTION'
-                elif 'BUY' in decision and 'WAIT' not in decision:
+                if 'AVOID' in decision:
+                    parsed['decision'] = 'AVOID'
+                elif 'BUY' in decision and 'WAIT' not in decision and 'AVOID' not in decision:
                     parsed['decision'] = 'BUY'
                 else:
                     parsed['decision'] = 'WAIT'
@@ -689,10 +738,19 @@ Beginner Tip:
                 else:
                     parsed['confidence'] = 'Medium'
                 current_section = None
+
+            elif line.lower() == 'confidence:':
+                current_section = 'confidence'
                     
             # Section headers
-            elif 'key reasoning' in line.lower():
+            elif 'market situation' in line.lower() or 'market story' in line.lower():
+                current_section = 'market_situation'
+            elif 'key reasoning' in line.lower() or 'why this decision' in line.lower():
                 current_section = 'reasoning'
+            elif 'what to watch' in line.lower():
+                current_section = 'what_to_watch'
+            elif 'timing insight' in line.lower():
+                current_section = 'timing_insight'
             elif 'why consider buying' in line.lower():
                 current_section = 'why_buy'
             elif 'why not buy yet' in line.lower():
@@ -707,6 +765,8 @@ Beginner Tip:
                 content = line[2:].strip()
                 if current_section == 'reasoning':
                     parsed['reasoning'].append(content)
+                elif current_section == 'what_to_watch':
+                    parsed['what_to_watch'] = content if not parsed['what_to_watch'] else parsed['what_to_watch'] + ' ' + content
                 elif current_section == 'why_buy':
                     parsed['why_buy'].append(content)
                 elif current_section == 'why_not_buy':
@@ -715,6 +775,24 @@ Beginner Tip:
                     parsed['risk_warning'] = content if not parsed['risk_warning'] else parsed['risk_warning'] + ' ' + content
                 elif current_section == 'beginner_tip':
                     parsed['beginner_tip'] = content if not parsed['beginner_tip'] else parsed['beginner_tip'] + ' ' + content
+
+            else:
+                if current_section == 'market_situation':
+                    parsed['market_situation'] = line if not parsed['market_situation'] else parsed['market_situation'] + ' ' + line
+                elif current_section == 'what_to_watch':
+                    parsed['what_to_watch'] = line if not parsed['what_to_watch'] else parsed['what_to_watch'] + ' ' + line
+                elif current_section == 'timing_insight':
+                    parsed['timing_insight'] = line if not parsed['timing_insight'] else parsed['timing_insight'] + ' ' + line
+                elif current_section == 'confidence':
+                    conf = line.strip().lower()
+                    if 'high' in conf:
+                        parsed['confidence'] = 'High'
+                    elif 'low' in conf:
+                        parsed['confidence'] = 'Low'
+                    else:
+                        parsed['confidence'] = 'Medium'
+                elif current_section == 'beginner_tip':
+                    parsed['beginner_tip'] = line if not parsed['beginner_tip'] else parsed['beginner_tip'] + ' ' + line
         
         return parsed
 
@@ -826,6 +904,131 @@ Beginner Tip:
             'caution_score': int(caution_score)
         }
 
+    def _analyze_recent_market_behavior(
+        self,
+        coin_id: str,
+        coin_name: str,
+        prices: List[float],
+        current_price: float,
+        price_change_24h: float,
+        ma10: float,
+        ma50: float
+    ) -> Dict:
+        """Build coin-specific recent behavior summary and concrete key events."""
+        if not prices or len(prices) < 8:
+            trend = "Sideways" if abs(price_change_24h) < 2 else ("Uptrend" if price_change_24h > 0 else "Downtrend")
+            return {
+                "market_summary": (
+                    f"Limited recent history for {coin_name}. Current move is {price_change_24h:+.2f}% in 24h, "
+                    "so treat this as an early signal and wait for confirmation candles."
+                ),
+                "key_events": [
+                    f"Recent 24h move: {price_change_24h:+.2f}% at approximately ${current_price:,.4f}"
+                ],
+                "trend": trend,
+                "volatility_level": "Medium"
+            }
+
+        recent30 = prices[-30:] if len(prices) >= 30 else prices[:]
+        recent14 = prices[-14:] if len(prices) >= 14 else prices[:]
+        recent7 = prices[-7:] if len(prices) >= 7 else prices[:]
+        recent3 = prices[-3:] if len(prices) >= 3 else prices[:]
+
+        last = recent30[-1]
+        first30 = recent30[0]
+        first7 = recent7[0]
+        first3 = recent3[0]
+
+        change30 = ((last - first30) / first30 * 100) if first30 else 0.0
+        change7 = ((last - first7) / first7 * 100) if first7 else 0.0
+        change3 = ((last - first3) / first3 * 100) if first3 else 0.0
+
+        high30 = max(recent30)
+        low30 = min(recent30)
+        drawdown_from_high = ((last - high30) / high30 * 100) if high30 else 0.0
+        rebound_from_low = ((last - low30) / low30 * 100) if low30 else 0.0
+
+        returns = []
+        for i in range(1, len(recent14)):
+            prev = recent14[i - 1]
+            if prev:
+                returns.append((recent14[i] - prev) / prev)
+
+        if returns:
+            avg = sum(returns) / len(returns)
+            variance = sum((r - avg) ** 2 for r in returns) / len(returns)
+            daily_vol_pct = (variance ** 0.5) * 100
+        else:
+            daily_vol_pct = 0.0
+
+        if daily_vol_pct >= 4.0:
+            volatility_level = "High"
+        elif daily_vol_pct >= 2.0:
+            volatility_level = "Medium"
+        else:
+            volatility_level = "Low"
+
+        if ma10 > ma50 and change7 > 3:
+            trend = "Uptrend"
+        elif ma10 < ma50 and change7 < -3:
+            trend = "Downtrend"
+        else:
+            trend = "Sideways"
+
+        near_support = last <= low30 * 1.06
+        breakout_attempt = last >= high30 * 0.985 and change7 > 4
+        recovering_after_drop = drawdown_from_high <= -10 and change3 > 2
+
+        if recovering_after_drop:
+            market_situation = (
+                f"{coin_name} is recovering after a sharp pullback. It is still {abs(drawdown_from_high):.1f}% below its recent high "
+                f"but has rebounded {change3:+.1f}% in the last 3 days."
+            )
+        elif trend == "Downtrend":
+            market_situation = (
+                f"{coin_name} remains in a downtrend with a {change7:+.1f}% move over the last week and weaker short-term structure. "
+                "Sellers are still controlling timing."
+            )
+        elif near_support and abs(change7) < 4:
+            market_situation = (
+                f"{coin_name} is stabilizing near support after recent weakness, trading close to its 30-day lower range. "
+                "Price action is calmer but confirmation is still needed."
+            )
+        elif breakout_attempt:
+            market_situation = (
+                f"{coin_name} is testing a breakout near its recent 30-day highs with improving weekly momentum. "
+                "The move is promising but can fail if follow-through fades."
+            )
+        else:
+            market_situation = (
+                f"{coin_name} is in a mixed phase: {change7:+.1f}% over 7 days and {change30:+.1f}% over 30 days, "
+                "with no fully clean trend continuation yet."
+            )
+
+        key_events = []
+        if drawdown_from_high <= -8:
+            key_events.append(f"Price is still {abs(drawdown_from_high):.1f}% below the 30-day high, showing recent downside pressure.")
+        if rebound_from_low >= 6:
+            key_events.append(f"Coin bounced {rebound_from_low:.1f}% from the 30-day low, signaling dip-buying interest.")
+        if breakout_attempt:
+            key_events.append("Price is pressing against the recent resistance zone (near 30-day highs), a potential breakout test.")
+        if abs(change7) <= 2.5:
+            key_events.append(f"Last 7 days are mostly sideways ({change7:+.1f}%), suggesting consolidation before the next move.")
+        if abs(price_change_24h) >= 5:
+            key_events.append(f"A strong 24h swing of {price_change_24h:+.1f}% indicates elevated short-term reaction risk.")
+
+        if not key_events:
+            key_events.append(
+                f"No major shock event detected; {coin_name} is showing controlled movement with {volatility_level.lower()} volatility recently."
+            )
+
+        return {
+            "market_summary": market_situation,
+            "key_events": key_events,
+            "trend": trend,
+            "volatility_level": volatility_level
+        }
+
     def _build_rule_based_trade_advice(
         self,
         coin_id: str,
@@ -835,219 +1038,77 @@ Beginner Tip:
         ma50: float,
         prediction: float,
         price_change_24h: float,
+        market_summary: str,
+        key_events: List[str],
+        trend: str,
+        volatility_level: str,
         error: str = ""
     ) -> str:
-        """
-        Fully dynamic rule-based trade analysis used when the LLM is unavailable.
-        Performs real multi-signal technical analysis and generates coin-specific,
-        beginner-friendly reasoning with 8+ distinct scenario branches.
-        """
+        """Rule-based fallback returning the same compact format expected from the LLM."""
         bullish = ma10 > ma50
         overbought = rsi >= 70
         oversold = rsi <= 30
-        rsi_neutral_high = 60 <= rsi < 70   # heating up but not extreme
-        rsi_neutral_low = 30 < rsi < 45     # cooling down, recovering
         ma_gap_pct = abs(ma10 - ma50) / ma50 * 100 if ma50 > 0 else 0
-        strong_trend = ma_gap_pct >= 2.0    # MA gap >= 2% is a meaningful trend
+        strong_trend = ma_gap_pct >= 2.0
         big_drop = price_change_24h <= -5
         big_pump = price_change_24h >= 7
-        positive_momentum = price_change_24h > 1
 
-        # ── RSI explanation (always coin-specific and numeric) ──────────────────
-        if overbought:
-            rsi_explanation = (
-                f"RSI is {rsi:.1f} — this is in 'overbought' territory (above 70). "
-                "Think of it like a spring stretched too far: most buyers have already bought, "
-                "which means fewer buyers remain to push the price higher. A pullback is likely."
-            )
-        elif oversold:
-            rsi_explanation = (
-                f"RSI is {rsi:.1f} — this is 'oversold' (below 30). "
-                "It means selling pressure has been very heavy and the price may have dropped too far too fast. "
-                "This can sometimes signal a bounce opportunity, but it can also mean the trend continues down."
-            )
-        elif rsi_neutral_high:
-            rsi_explanation = (
-                f"RSI is {rsi:.1f} — heating up but not yet overbought. "
-                "Buyers have the upper hand right now, but the window to enter cleanly may be narrowing. "
-                "If RSI crosses 70, the coin could be due for a cool-off."
-            )
-        elif rsi_neutral_low:
-            rsi_explanation = (
-                f"RSI is {rsi:.1f} — recovering from weak territory. "
-                "The coin has lost some momentum recently but selling pressure is easing. "
-                "This is a watchful zone — neither a clear buy nor sell signal."
-            )
-        else:
-            rsi_explanation = (
-                f"RSI is {rsi:.1f} — right in the neutral zone (between 45 and 60). "
-                "This means buyers and sellers are roughly balanced right now. "
-                "There's no extreme urgency to buy or sell — the coin is in a natural resting state."
-            )
+        coin_name = coin_id.replace('-', ' ').title()
+        event_line = key_events[0] if key_events else f"{coin_name} is in a mixed phase with no dominant catalyst."
 
-        # ── MA explanation (trend + strength) ──────────────────────────────────
-        if bullish and strong_trend:
-            ma_explanation = (
-                f"The 10-day average price (${ma10:,.2f}) is {ma_gap_pct:.1f}% above the 50-day average (${ma50:,.2f}). "
-                "This is a meaningful upward trend — like a car that's been accelerating faster than its usual speed. "
-                "Short-term buyers are in control, which is a positive sign."
-            )
-        elif bullish and not strong_trend:
-            ma_explanation = (
-                f"The 10-day average (${ma10:,.2f}) is just slightly above the 50-day average (${ma50:,.2f}) "
-                f"by {ma_gap_pct:.1f}%. That's a mild uptrend — like a flat road with a very gentle uphill slope. "
-                "The bullish signal exists but it's not strong yet."
-            )
-        elif not bullish and strong_trend:
-            ma_explanation = (
-                f"The 10-day average (${ma10:,.2f}) is {ma_gap_pct:.1f}% below the 50-day average (${ma50:,.2f}). "
-                "This is a clear downtrend — short-term price action is losing to the longer trend. "
-                "Buying into a strong downtrend is risky for beginners."
-            )
-        else:
-            ma_explanation = (
-                f"The 10-day average (${ma10:,.2f}) is slightly below the 50-day average (${ma50:,.2f}) "
-                f"by only {ma_gap_pct:.1f}%. This is a weak bearish signal — the trend hasn't fully turned down yet, "
-                "but upward momentum is currently lacking."
-            )
-
-        # ── Momentum/Prediction explanation ────────────────────────────────────
-        if big_pump:
-            momentum_explanation = (
-                f"The price surged {price_change_24h:+.1f}% in the last 24 hours. "
-                f"Combined with a {prediction:.0f}% prediction of further increase, this looks exciting — "
-                "but sharp run-ups often attract profit-takers, which can cause a sudden drop. "
-                "Chasing a coin after a big pump is a classic beginner mistake called FOMO."
-            )
-        elif big_drop:
-            momentum_explanation = (
-                f"The price fell {price_change_24h:.1f}% in the last 24 hours — a significant drop. "
-                f"The model gives a {prediction:.0f}% chance of a rebound. "
-                "Sometimes big drops are opportunities, but they can also keep falling. "
-                "This is a 'catching a falling knife' scenario — high risk."
-            )
-        elif positive_momentum and prediction >= 60:
-            momentum_explanation = (
-                f"Price is up {price_change_24h:+.1f}% in 24 hours with a {prediction:.0f}% predicted chance of further gains. "
-                "Both signals point in the same direction. Momentum is building gradually — "
-                "this is generally a healthier entry than chasing a sudden spike."
-            )
-        elif prediction >= 60:
-            momentum_explanation = (
-                f"Even though the 24h move is modest ({price_change_24h:+.1f}%), "
-                f"the model assigns a {prediction:.0f}% chance of a short-term price increase. "
-                "Quiet accumulation before a move is sometimes the best time to enter."
-            )
-        elif prediction < 45:
-            momentum_explanation = (
-                f"The model gives only a {prediction:.0f}% chance of a price increase — below 50%, which means "
-                "the algorithm sees more risk than opportunity right now. "
-                f"Combined with a {price_change_24h:+.1f}% 24h change, short-term momentum is weak."
-            )
-        else:
-            momentum_explanation = (
-                f"24h price change: {price_change_24h:+.1f}%, prediction: {prediction:.0f}%. "
-                "These are mixed signals — not enough evidence to confidently predict direction. "
-                "When signals conflict, doing nothing is a valid strategy."
-            )
-
-        # ── Decision logic with 8 branches ─────────────────────────────────────
-        if overbought and big_pump:
-            decision, confidence = "WAIT", "High"
-            risk_warning = (
-                f"The coin is overbought (RSI {rsi:.1f}) AND just pumped {price_change_24h:+.1f}% in 24h. "
-                "Two classic 'overheated' signals together. Probability of a near-term correction is high."
-            )
-            tip = "Never buy a coin right after a big spike. Set a price alert for 5-8% lower and buy there instead."
-
-        elif overbought:
-            decision, confidence = "WAIT", "High"
-            risk_warning = (
-                f"RSI at {rsi:.1f} means most buyers have already entered. Overbought coins often pull back "
-                "before continuing upward. Waiting for RSI to drop below 60 gives a much safer entry."
-            )
-            tip = f"Set a price alert when RSI drops below 60 — that's usually a cleaner entry point for {coin_id.title()}."
-
-        elif oversold and bullish and prediction >= 60 and risk_level in ("medium", "high"):
-            decision, confidence = "BUY WITH CAUTION", "Medium"
-            risk_warning = (
-                f"RSI {rsi:.1f} suggests the coin was heavily sold. Potential bounce setup, "
-                "but oversold markets can stay oversold for a while. Use a tight stop-loss."
-            )
-            tip = "If you enter, size it small (no more than 5% of your portfolio) and set a stop-loss immediately."
-
-        elif oversold and risk_level == "low":
-            decision, confidence = "WAIT", "Medium"
-            risk_warning = (
-                f"Even though RSI {rsi:.1f} suggests a possible bounce, your LOW risk profile means "
-                "you should wait for the bounce to begin BEFORE entering — don't try to catch the bottom."
-            )
-            tip = "Wait for RSI to climb above 40 and price to show 2+ green days before considering entry."
-
-        elif bullish and strong_trend and not overbought and prediction >= 58:
-            if risk_level == "high":
-                decision, confidence = "BUY", "High"
-            elif risk_level == "medium":
-                decision, confidence = "BUY WITH CAUTION", "High"
-            else:
-                decision, confidence = "BUY WITH CAUTION", "Medium"
-            risk_warning = (
-                f"Trend and prediction are aligned positively. Main risk: if the MA gap ({ma_gap_pct:.1f}%) "
-                "narrows quickly, the trend could be losing steam. Monitor daily."
-            )
-            tip = "Enter with a position no larger than 10% of your balance and set a stop-loss 5-7% below your buy price."
-
-        elif bullish and not strong_trend and prediction >= 55 and not overbought:
-            decision = "BUY WITH CAUTION" if risk_level != "low" else "WAIT"
+        if overbought and (big_pump or prediction < 55):
+            decision = "AVOID" if risk_level in ("low", "medium") else "WAIT"
+            confidence = "High"
+            timing = "Late entry - price is stretched after recent upside and pullback risk is elevated."
+            tip = "Wait for a pullback and confirmation candle before re-entering."
+        elif not bullish and strong_trend and prediction < 50:
+            decision = "AVOID" if risk_level != "high" else "WAIT"
+            confidence = "High"
+            timing = "Risky entry - trend remains down and recovery probability is not supportive yet."
+            tip = "Do not average down; wait for trend structure to improve first."
+        elif bullish and prediction >= 62 and not overbought and (risk_level in ("medium", "high")):
+            decision = "BUY"
+            confidence = "High" if strong_trend else "Medium"
+            timing = "Good entry - momentum and trend are currently aligned."
+            tip = "Start with a small size and place a strict stop-loss below recent support."
+        elif oversold and prediction >= 58:
+            decision = "BUY" if risk_level == "high" else "WAIT"
             confidence = "Medium"
-            risk_warning = (
-                f"The bullish trend exists but is weak (MA gap: {ma_gap_pct:.1f}%). "
-                "Weak trends can reverse easily. This is a 'maybe' not a strong signal."
-            )
-            tip = "Consider a 'test buy' with just 3-5% of your portfolio. If it goes well, add more later."
-
-        elif not bullish and prediction >= 65 and rsi < 55:
-            decision = "BUY WITH CAUTION" if risk_level == "high" else "WAIT"
-            confidence = "Low"
-            risk_warning = (
-                f"The short-term trend is down (MA bearish), but the model thinks there's a {prediction:.0f}% "
-                "chance of a recovery. Contradictory signals mean high uncertainty."
-            )
-            tip = "When trend and prediction contradict each other, wait for price action to confirm direction before entering."
-
-        elif big_drop and prediction < 50:
-            decision, confidence = "WAIT", "High"
-            risk_warning = (
-                f"Price dropped {price_change_24h:.1f}% and the model shows {prediction:.0f}% confidence of recovery — "
-                "below 50%. Buying into a falling coin without confirmation is risky for any risk level."
-            )
-            tip = "Look for the price to stabilize (2-3 flat/green days) before considering entry after a big drop."
-
+            timing = "Early entry - rebound setup is forming but confirmation is still developing."
+            tip = "Wait for a higher low on the short-term chart if you want safer timing."
         else:
-            decision, confidence = "WAIT", "Medium"
-            risk_warning = (
-                "Current signals are mixed or weak. No strong entry signal exists right now. "
-                "In trading, missing a trade is always better than taking a bad trade."
-            )
-            tip = "Use this time to study the coin's chart. Set a price alert for a level where signals improve."
+            decision = "WAIT"
+            confidence = "Medium"
+            timing = "Risky entry - signal alignment is incomplete for a clean setup."
+            tip = "Set alerts at support/resistance and enter only after confirmation."
+
+        if decision == "BUY":
+            trigger_condition = "Enter only if price holds above nearby support after a pullback, then prints a higher low."
+        elif decision == "WAIT":
+            trigger_condition = "Wait for a clean breakout above recent resistance with follow-through volume before entering."
+        else:
+            trigger_condition = "Avoid until downside pressure fades and price reclaims a key level with stability for at least 1-2 sessions."
+
+        decision_reason_1 = f"Recent move {price_change_24h:+.1f}% combined with the latest structure suggests the market is in a {trend.lower()} transition phase."
+        decision_reason_2 = f"Key event: {event_line} This changes timing risk for beginners who panic during volatility."
+        decision_reason_3 = f"Prediction at {prediction:.0f}% supports a {decision.lower()} stance only if the trigger confirms price behavior."
 
         return (
             f"Decision: {decision}\n\n"
-            f"Confidence: {confidence}\n\n"
-            "Key Reasoning:\n"
-            f"- {rsi_explanation}\n"
-            f"- {ma_explanation}\n"
-            f"- {momentum_explanation}\n"
-            "\nWhy Consider Buying:\n"
-            f"- {'Trend and momentum are aligned to the upside.' if bullish and prediction >= 55 else 'There is at least partial support for recovery if risk is managed carefully.'}\n"
-            f"- {'Prediction is above coin-flip odds, suggesting buyers still have a chance.' if prediction >= 50 else 'If you are aggressive, this could still be watched as a potential setup after confirmation.'}\n"
-            "\nWhy Not Buy Yet:\n"
-            f"- {'RSI is elevated, which increases pullback risk.' if overbought else 'Signal alignment is not fully strong, so timing risk remains.'}\n"
-            f"- {'Recent price movement is too sharp, which can trap late entries.' if big_pump or big_drop else 'Without confirmation candles, entering now can still be premature.'}\n"
-            "\nRisk Warning:\n"
-            f"- {risk_warning}\n"
-            "\nBeginner Tip:\n"
-            f"- {tip}"
+            "Market Story:\n"
+            f"{market_summary}\n\n"
+            "Why This Decision:\n"
+            f"- {decision_reason_1}\n"
+            f"- {decision_reason_2}\n"
+            f"- {decision_reason_3}\n\n"
+            "What To Watch (IMPORTANT):\n"
+            f"{trigger_condition}\n\n"
+            "Timing Insight:\n"
+            f"{timing}\n\n"
+            "Confidence:\n"
+            f"{confidence}\n\n"
+            "Beginner Tip:\n"
+            f"{tip}"
         )
     
     def _get_user_profile(self, user_id: int) -> Dict:

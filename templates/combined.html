@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CoinPrep Simulator - Crypto Portfolio Manager</title>
+    <title>COINPREP - Crypto Portfolio Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary-color: #2563eb;
@@ -854,48 +854,21 @@
             font-size: 12px;
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     {% if section == 'login' %}
-        <div class="auth-wrapper">
-            <div class="floating-orb orb-1"></div>
-            <div class="floating-orb orb-2"></div>
-            <div class="floating-orb orb-3"></div>
-            
-            <div class="auth-container">
-                <!-- Left Info Panel -->
-                <div class="auth-info-panel">
-                    <h2>Welcome Back to the Future of Crypto</h2>
-                    <p>Track your portfolio in real-time, get intelligent alerts, and make data-driven decisions with advanced risk analytics.</p>
-                    
-                    <div class="info-stats">
-                        <div class="stat-item">
-                            <span class="stat-number">$10K</span>
-                            <span class="stat-label">Virtual Balance</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number">50+</span>
-                            <span class="stat-label">Cryptocurrencies</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number">24/7</span>
-                            <span class="stat-label">Live Tracking</span>
-                        </div>
-                    </div>
+        <div class="pixel-auth-page">
+            <div class="pixel-scanline"></div>
+            <div class="pixel-auth-shell">
+                <div class="pixel-auth-logo">
+                    <i class="fas fa-chart-line"></i>
+                    <h1>COINPREP</h1>
+                    <p>SIMULATOR</p>
                 </div>
 
-                <!-- Auth Card -->
-                <div class="auth-card">
-                    <div class="auth-logo">
-                        <div class="logo-icon-wrapper">
-                            <div class="logo-glow"></div>
-                            <i class="fas fa-chart-line"></i>
-                        </div>
-                        <h1>CoinPrep Simulator</h1>
-                        <p>AI-Powered Portfolio Manager</p>
-                    </div>
-
-                    <h2 class="auth-title">Sign In</h2>
+                <div class="pixel-auth-card">
+                    <h2>SIGN IN</h2>
 
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
@@ -916,88 +889,57 @@
                         </div>
                     {% endif %}
 
-                    <form method="POST" action="{{ url_for('login') }}" id="loginForm">
-                        <div class="form-group">
-                            <label for="username" class="form-label">Username</label>
-                            <div class="form-control-wrapper">
+                    <form method="POST" action="{{ url_for('login') }}" id="loginForm" class="pixel-auth-form">
+                        <div class="pixel-field">
+                            <label for="username">USERNAME</label>
+                            <div class="pixel-field-wrap">
                                 <i class="fas fa-user"></i>
-                                <input type="text" class="form-control" id="username" name="username" placeholder="Enter your username" required autocomplete="username">
-                                <div class="input-highlight"></div>
+                                <input type="text" class="form-control" id="username" name="username" placeholder="Enter username" required autocomplete="username">
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="password" class="form-label">Password</label>
-                            <div class="form-control-wrapper">
+                        <div class="pixel-field">
+                            <label for="password">PASSWORD</label>
+                            <div class="pixel-field-wrap">
                                 <i class="fas fa-lock"></i>
-                                <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
-                                <i class="fas fa-eye password-toggle" onclick="togglePassword('password')"></i>
-                                <div class="input-highlight"></div>
+                                <input type="password" class="form-control" id="password" name="password" placeholder="Enter password" required autocomplete="current-password">
+                                <button type="button" class="pixel-toggle-btn" onclick="togglePassword('password')" aria-label="Toggle password visibility">
+                                    <i class="fas fa-eye"></i>
+                                </button>
                             </div>
                         </div>
 
-                        <button type="submit" class="btn-auth">
-                            <i class="fas fa-sign-in-alt"></i> Sign In
-                        </button>
+                        <button type="submit" class="btn-auth">SIGN IN →</button>
                     </form>
 
                     <div class="auth-link">
-                        Don't have an account? <a href="{{ url_for('register') }}">Create Account</a>
-                    </div>
-
-                    <div class="auth-divider">
-                        <span>Features</span>
+                        No account?
+                        <a href="{{ url_for('register') }}">CREATE ONE</a>
                     </div>
 
                     <ul class="features-list">
-                        <li><i class="fas fa-check-circle"></i> Real-time portfolio tracking</li>
-                        <li><i class="fas fa-check-circle"></i> Advanced risk analysis</li>
-                        <li><i class="fas fa-check-circle"></i> Smart price alerts</li>
+                        <li><span>▸</span> Real-time tracking</li>
+                        <li><span>▸</span> Risk analysis</li>
+                        <li><span>▸</span> Smart alerts</li>
                     </ul>
                 </div>
+
+                <p class="pixel-auth-footer">INSERT COIN TO CONTINUE</p>
             </div>
         </div>
 
     {% elif section == 'register' %}
-        <div class="auth-wrapper">
-            <div class="floating-orb orb-1"></div>
-            <div class="floating-orb orb-2"></div>
-            <div class="floating-orb orb-3"></div>
-            
-            <div class="auth-container">
-                <!-- Left Info Panel -->
-                <div class="auth-info-panel">
-                    <h2>Start Your Crypto Journey Today</h2>
-                    <p>Join thousands of investors using AI-powered analytics to make smarter trading decisions and maximize returns.</p>
-                    
-                    <div class="info-stats">
-                        <div class="stat-item">
-                            <span class="stat-number">1000+</span>
-                            <span class="stat-label">Active Users</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number">95%</span>
-                            <span class="stat-label">Success Rate</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number">Free</span>
-                            <span class="stat-label">Forever</span>
-                        </div>
-                    </div>
+        <div class="pixel-auth-page">
+            <div class="pixel-scanline"></div>
+            <div class="pixel-auth-shell">
+                <div class="pixel-auth-logo">
+                    <i class="fas fa-chart-line pixel-secondary"></i>
+                    <h1>COINPREP</h1>
+                    <p>CREATE ACCOUNT</p>
                 </div>
 
-                <!-- Auth Card -->
-                <div class="auth-card">
-                    <div class="auth-logo">
-                        <div class="logo-icon-wrapper">
-                            <div class="logo-glow"></div>
-                            <i class="fas fa-rocket"></i>
-                        </div>
-                        <h1>CoinPrep Simulator</h1>
-                        <p>Start Your Success Story</p>
-                    </div>
-
-                    <h2 class="auth-title">Create Account</h2>
+                <div class="pixel-auth-card">
+                    <h2>REGISTER</h2>
 
                     {% if error %}
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -1007,80 +949,66 @@
                         </div>
                     {% endif %}
 
-                    <form method="POST" action="{{ url_for('register') }}" id="registerForm">
-                        <div class="form-group">
-                            <label for="username" class="form-label">Username</label>
-                            <div class="form-control-wrapper">
+                    <form method="POST" action="{{ url_for('register') }}" id="registerForm" class="pixel-auth-form">
+                        <div class="pixel-field">
+                            <label for="username">USERNAME</label>
+                            <div class="pixel-field-wrap">
                                 <i class="fas fa-user"></i>
-                                <input type="text" class="form-control" id="username" name="username" placeholder="Choose a username" required autocomplete="username">
-                                <div class="input-highlight"></div>
+                                <input type="text" class="form-control" id="username" name="username" placeholder="Choose username" required autocomplete="username">
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="email" class="form-label">Email Address</label>
-                            <div class="form-control-wrapper">
+                        <div class="pixel-field">
+                            <label for="email">EMAIL</label>
+                            <div class="pixel-field-wrap">
                                 <i class="fas fa-envelope"></i>
-                                <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email" required autocomplete="email">
-                                <div class="input-highlight"></div>
+                                <input type="email" class="form-control" id="email" name="email" placeholder="Enter email" required autocomplete="email">
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="password" class="form-label">Password</label>
-                            <div class="form-control-wrapper">
+                        <div class="pixel-field">
+                            <label for="password">PASSWORD</label>
+                            <div class="pixel-field-wrap">
                                 <i class="fas fa-lock"></i>
-                                <input type="password" class="form-control" id="password" name="password" placeholder="Create a strong password" required autocomplete="new-password" oninput="checkPasswordStrength(this.value)">
-                                <i class="fas fa-eye password-toggle" onclick="togglePassword('password')"></i>
-                                <div class="input-highlight"></div>
-                            </div>
-                            <div class="password-strength">
-                                <div class="password-strength-bar" id="passwordStrengthBar"></div>
+                                <input type="password" class="form-control" id="password" name="password" placeholder="Create password" required autocomplete="new-password">
+                                <button type="button" class="pixel-toggle-btn" onclick="togglePassword('password')" aria-label="Toggle password visibility">
+                                    <i class="fas fa-eye"></i>
+                                </button>
                             </div>
                         </div>
 
-                        <button type="submit" class="btn-auth">
-                            <i class="fas fa-user-plus"></i> Create Account
-                        </button>
+                        <button type="submit" class="btn-auth">CREATE ACCOUNT →</button>
                     </form>
 
                     <div class="auth-link">
-                        Already have an account? <a href="{{ url_for('login') }}">Sign In</a>
-                    </div>
-
-                    <div class="auth-divider">
-                        <span>What You'll Get</span>
+                        Have an account?
+                        <a href="{{ url_for('login') }}">SIGN IN</a>
                     </div>
 
                     <ul class="features-list">
-                        <li><i class="fas fa-check-circle"></i> $10,000 virtual CryptoBucks</li>
-                        <li><i class="fas fa-check-circle"></i> Email price alerts</li>
-                        <li><i class="fas fa-check-circle"></i> Strategy backtesting</li>
-                        <li><i class="fas fa-check-circle"></i> Risk assessment tools</li>
+                        <li><span>▸</span> $10,000 virtual CryptoBucks</li>
+                        <li><span>▸</span> Email price alerts</li>
+                        <li><span>▸</span> Strategy backtesting</li>
+                        <li><span>▸</span> Risk assessment tools</li>
                     </ul>
                 </div>
+
+                <p class="pixel-auth-footer">PLAYER 2 - PRESS START</p>
             </div>
         </div>
     
     {% elif section == 'verify' %}
-        <div class="auth-wrapper">
-            <div class="floating-orb orb-1"></div>
-            <div class="floating-orb orb-2"></div>
-            <div class="floating-orb orb-3"></div>
-            
-            <div class="auth-container">
-                <!-- Auth Card -->
-                <div class="auth-card">
-                    <div class="auth-logo">
-                        <div class="logo-icon-wrapper">
-                            <div class="logo-glow"></div>
-                            <i class="fas fa-envelope-open-text"></i>
-                        </div>
-                        <h1>Verify Your Email</h1>
-                        <p>Almost there!</p>
-                    </div>
+        <div class="pixel-auth-page">
+            <div class="pixel-scanline"></div>
+            <div class="pixel-auth-shell">
+                <div class="pixel-auth-logo">
+                    <i class="fas fa-envelope-open-text"></i>
+                    <h1>COINPREP</h1>
+                    <p>VERIFY EMAIL</p>
+                </div>
 
-                    <h2 class="auth-title">Enter Verification Code</h2>
+                <div class="pixel-auth-card">
+                    <h2>ENTER CODE</h2>
 
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
@@ -1091,7 +1019,7 @@
                                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                 </div>
                             {% endfor %}
-                        {% endif %} 
+                        {% endif %}
                     {% endwith %}
                     {% if error %}
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -1106,49 +1034,52 @@
                         <span>A 6-digit verification code has been sent to your email.</span>
                     </div>
 
-                    <form method="POST" action="{{ url_for('verify', email=email) }}">
-                        <div class="form-group">
-                            <label for="code" class="form-label">Verification Code</label>
-                            <div class="form-control-wrapper">
+                    <form method="POST" action="{{ url_for('verify', email=email) }}" class="pixel-auth-form">
+                        <div class="pixel-field">
+                            <label for="code">VERIFICATION CODE</label>
+                            <div class="pixel-field-wrap">
                                 <i class="fas fa-key"></i>
                                 <input type="text" class="form-control verification-input" id="code" name="code" placeholder="000000" maxlength="6" pattern="[A-Z0-9]{6}" required style="text-transform: uppercase;">
-                                <div class="input-highlight"></div>
                             </div>
                         </div>
 
-                        <button type="submit" class="btn-auth">
-                            <i class="fas fa-check-circle"></i> Verify Account
-                        </button>
+                        <button type="submit" class="btn-auth">VERIFY ACCOUNT →</button>
                     </form>
 
                     <div class="auth-link">
-                        <a href="{{ url_for('login') }}"><i class="fas fa-arrow-left"></i> Back to Login</a>
+                        <a href="{{ url_for('login') }}">BACK TO LOGIN</a>
                     </div>
                 </div>
             </div>
         </div>
 
     {% elif section == 'dashboard' %}
-        <div class="container">
+        <div class="container dashboard-page">
             <nav class="navbar navbar-expand-lg navbar-light">
-                <a class="navbar-brand" href="#"><i class="fas fa-chart-line"></i> CoinPrep Simulator</a>
+                <a class="navbar-brand" href="#"><i class="fas fa-chart-line"></i> COINPREP</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <div class="navbar-nav ms-auto">
-                        <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-store"></i> Live Market</a>
+                        <a class="nav-link active" href="{{ url_for('dashboard') }}"><i class="fas fa-th-large"></i> Dashboard</a>
+                        <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-store"></i> Market</a>
                         <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-briefcase"></i> Portfolio</a>
                         <a class="nav-link" href="{{ url_for('orders') }}"><i class="fas fa-list-ul"></i> Orders</a>
                         <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i> Watchlist</a>
                         <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i> Alerts</a>
-                        <a class="nav-link" href="{{ url_for('backtester') }}"><i class="fas fa-history"></i> Backtester</a>
-                        <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-shield-alt"></i> Risk Quiz</a>
-                        <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i> Achievements</a>
+                        <a class="nav-link" href="{{ url_for('backtester') }}"><i class="fas fa-history"></i> Backtest</a>
+                        <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-shield-alt"></i> Risk</a>
+                        <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i> Achieve</a>
                         <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
                     </div>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">DASHBOARD</h1>
+                <p class="text-muted" style="margin:0;">Welcome back, {{ user.username if user and user.username else 'Trader' }}</p>
+            </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -1164,35 +1095,35 @@
             <!-- Stats Grid -->
             {% if user %}
             <div class="stats-grid">
-                <div class="stat-card">
+                <div class="stat-card green">
                     <i class="fas fa-wallet stat-icon"></i>
-                    <div class="stat-label">CryptoBucks Balance</div>
+                    <div class="stat-label">CRYPTOBUCKS</div>
                     <div class="stat-value">${{ user.crypto_bucks | round(2) }}</div>
-                    <small class="text-muted">Virtual currency for trading</small>
+                    <small class="text-muted">Virtual currency</small>
                 </div>
                 <div class="stat-card blue">
                     <i class="fas fa-coins stat-icon"></i>
-                    <div class="stat-label">USDT Balance</div>
+                    <div class="stat-label">USDT BALANCE</div>
                     <div class="stat-value">${{ user.tether_balance | default(0) | round(2) }}</div>
-                    <small class="text-muted">Stablecoin for crypto trading</small>
+                    <small class="text-muted">Stablecoin</small>
                 </div>
-                <div class="stat-card green">
+                <div class="stat-card pink">
                     <i class="fas fa-shield-alt stat-icon"></i>
-                    <div class="stat-label">Risk Tolerance</div>
-                    <div class="stat-value">{{ user.risk_tolerance | capitalize if user.risk_tolerance else 'Not Set' }}</div>
+                    <div class="stat-label">RISK TOLERANCE</div>
+                    <div class="stat-value">{{ user.risk_tolerance | upper if user.risk_tolerance else 'UNKNOWN' }}</div>
                 </div>
                 <div class="stat-card orange">
                     <i class="fas fa-chart-line stat-icon"></i>
-                    <div class="stat-label">Active Alerts</div>
+                    <div class="stat-label">ACTIVE ALERTS</div>
                     <div class="stat-value">{{ triggered_alerts|length if triggered_alerts else 0 }}</div>
                 </div>
             </div>
             {% endif %}
 
-            <!-- Price Alert Notifications -->
-            <div class="dashboard-card">
+            <!-- PRICE ALERTS -->
+            <div class="dashboard-card dashboard-card-alerts">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h3><i class="fas fa-bell"></i> Price Alert Notifications</h3>
+                    <h3><i class="fas fa-bell"></i> PRICE ALERTS</h3>
                     <form method="POST" action="{{ url_for('refresh_alerts') }}">
                         <button type="submit" class="btn btn-secondary btn-sm">
                             <i class="fas fa-sync-alt"></i> Refresh Alerts
@@ -1218,59 +1149,117 @@
                     {% else %}
                         <div class="empty-state">
                             <i class="fas fa-bell-slash"></i>
-                            <h4>No Active Alerts</h4>
+                            <h4>No active alerts</h4>
                             <p>You don't have any triggered price alerts at the moment.</p>
                         </div>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Market Overview -->
-            <div class="dashboard-card">
-                <h3><i class="fas fa-globe"></i> Market Overview (Top Market Caps)</h3>
-                <div class="table-wrapper">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Coin</th>
-                                <th>Price (USD)</th>
-                                <th>24h Change</th>
-                                <th>Market Cap</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if coins %}
-                                {% for coin in coins %}
-                                    <tr>
-                                        <td><strong>{{ coin.name }}</strong></td>
-                                        <td><strong>${{ coin.current_price | round(2) }}</strong></td>
-                                        <td>
-                                            <span class="{% if coin.price_change_percentage_24h > 0 %}price-positive{% else %}price-negative{% endif %}">
-                                                <i class="fas fa-{% if coin.price_change_percentage_24h > 0 %}arrow-up{% else %}arrow-down{% endif %}"></i>
-                                                {{ coin.price_change_percentage_24h | round(2) }}%
-                                            </span>
-                                        </td>
-                                        <td>${{ '{:,.0f}'.format(coin.market_cap) }}</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-info" onclick="showDashboardChart('{{ coin.id }}'); return false;">
-                                                <i class="fas fa-chart-area"></i> View Chart
-                                            </button>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
+            <div class="dashboard-split">
+                <!-- Market Overview -->
+                <div class="dashboard-card dashboard-card-market">
+                    <h3><i class="fas fa-globe"></i> MARKET OVERVIEW</h3>
+                    <div class="table-wrapper">
+                        <table class="table table-hover">
+                            <thead>
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">No market data available</td>
+                                    <th>Coin</th>
+                                    <th>Price</th>
+                                    <th>24h</th>
+                                    <th>Market Cap</th>
+                                    <th>Action</th>
                                 </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {% if coins %}
+                                    {% for coin in coins %}
+                                        <tr>
+                                            <td><strong>{{ coin.name }}</strong></td>
+                                            <td><strong>${{ coin.current_price | round(2) }}</strong></td>
+                                            <td>
+                                                <span class="{% if coin.price_change_percentage_24h > 0 %}price-positive{% else %}price-negative{% endif %}">
+                                                    <i class="fas fa-{% if coin.price_change_percentage_24h > 0 %}arrow-up{% else %}arrow-down{% endif %}"></i>
+                                                    {{ coin.price_change_percentage_24h | round(2) }}%
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if coin.market_cap >= 1000000000000 %}
+                                                    ${{ '%.2f'|format(coin.market_cap / 1000000000000) }}T
+                                                {% elif coin.market_cap >= 1000000000 %}
+                                                    ${{ '%.2f'|format(coin.market_cap / 1000000000) }}B
+                                                {% elif coin.market_cap >= 1000000 %}
+                                                    ${{ '%.2f'|format(coin.market_cap / 1000000) }}M
+                                                {% else %}
+                                                    ${{ '{:,.0f}'.format(coin.market_cap) }}
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-info" onclick="showDashboardChart('{{ coin.id }}'); return false;">
+                                                    <i class="fas fa-chart-bar"></i> CHART
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-4">No market data available</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Archived Trades -->
+                <div class="dashboard-card dashboard-card-archived">
+                    <h3><i class="fas fa-history"></i> ARCHIVED TRADES</h3>
+                    <div class="table-wrapper">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Wallet</th>
+                                    <th>Coin</th>
+                                    <th>Amount</th>
+                                    <th>Buy $</th>
+                                    <th>Sell $</th>
+                                    <th>P/L</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if sold_transactions is defined and sold_transactions %}
+                                    {% for tx in sold_transactions[:6] %}
+                                        {% if tx.profit is defined %}
+                                            {% set pl = tx.profit %}
+                                        {% elif tx.sold_price is defined and tx.price is defined and tx.amount is defined %}
+                                            {% set pl = (tx.sold_price - tx.price) * tx.amount %}
+                                        {% else %}
+                                            {% set pl = 0 %}
+                                        {% endif %}
+                                        <tr>
+                                            <td>Wallet {{ tx.wallet_id if tx.wallet_id is defined else '-' }}</td>
+                                            <td>{{ tx.coin_id | upper if tx.coin_id is defined else '-' }}</td>
+                                            <td>{{ tx.amount | round(4) if tx.amount is defined else '-' }}</td>
+                                            <td>${{ tx.price | round(2) if tx.price is defined else '-' }}</td>
+                                            <td>${{ tx.sold_price | round(2) if tx.sold_price is defined else '-' }}</td>
+                                            <td class="{% if pl >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                                {% if pl >= 0 %}+{% endif %}${{ pl | round(2) }}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-4">No archived trades yet</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             <!-- Chart Container -->
-            <div class="chart-container">
+            <div class="chart-container" style="display: none;">
                 <canvas id="priceChartDashboard"></canvas>
             </div>
 
@@ -1281,6 +1270,7 @@
                     window.showDashboardChart = function(coinId) {
                         // Show loading state
                         const chartContainer = document.querySelector('.chart-container');
+                        chartContainer.style.display = 'block';
                         chartContainer.style.opacity = '0.5';
                         
                         fetch(`/historical/${coinId}`)
@@ -1309,45 +1299,45 @@
                                             {
                                                 label: `${coinId.toUpperCase()} Price (USD)`,
                                                 data: data.prices,
-                                                borderColor: '#667eea',
-                                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                                borderColor: '#12e2ff',
+                                                backgroundColor: 'rgba(18, 226, 255, 0.16)',
                                                 borderWidth: 3,
                                                 yAxisID: 'y-price',
                                                 fill: true,
                                                 tension: 0.4,
                                                 pointRadius: 0,
                                                 pointHoverRadius: 6,
-                                                pointHoverBackgroundColor: '#667eea',
+                                                pointHoverBackgroundColor: '#12e2ff',
                                                 pointHoverBorderColor: '#fff',
                                                 pointHoverBorderWidth: 2
                                             },
                                             {
                                                 label: `${coinId.toUpperCase()} Volume (USD)`,
                                                 data: data.volumes,
-                                                borderColor: '#10b981',
-                                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                                borderColor: '#00f5a0',
+                                                backgroundColor: 'rgba(0, 245, 160, 0.14)',
                                                 borderWidth: 2,
                                                 yAxisID: 'y-volume',
                                                 fill: true,
                                                 tension: 0.4,
                                                 pointRadius: 0,
                                                 pointHoverRadius: 6,
-                                                pointHoverBackgroundColor: '#10b981',
+                                                pointHoverBackgroundColor: '#00f5a0',
                                                 pointHoverBorderColor: '#fff',
                                                 pointHoverBorderWidth: 2
                                             },
                                             {
                                                 label: `${coinId.toUpperCase()} Market Cap (USD)`,
                                                 data: data.market_caps,
-                                                borderColor: '#f59e0b',
-                                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                                borderColor: '#ff4df0',
+                                                backgroundColor: 'rgba(255, 77, 240, 0.14)',
                                                 borderWidth: 2,
                                                 yAxisID: 'y-market-cap',
                                                 fill: true,
                                                 tension: 0.4,
                                                 pointRadius: 0,
                                                 pointHoverRadius: 6,
-                                                pointHoverBackgroundColor: '#f59e0b',
+                                                pointHoverBackgroundColor: '#ff4df0',
                                                 pointHoverBorderColor: '#fff',
                                                 pointHoverBorderWidth: 2
                                             }
@@ -1374,7 +1364,7 @@
                                                 }
                                             },
                                             tooltip: {
-                                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                                backgroundColor: 'rgba(12, 18, 29, 0.92)',
                                                 padding: 12,
                                                 titleFont: {
                                                     size: 14,
@@ -1396,13 +1386,13 @@
                                                         size: 14,
                                                         weight: 'bold'
                                                     },
-                                                    color: '#64748b'
+                                                    color: '#7f91b2'
                                                 },
                                                 grid: {
                                                     display: false
                                                 },
                                                 ticks: {
-                                                    color: '#64748b',
+                                                    color: '#8ba3c5',
                                                     font: {
                                                         size: 12
                                                     }
@@ -1419,13 +1409,13 @@
                                                         size: 14,
                                                         weight: 'bold'
                                                     },
-                                                    color: '#667eea'
+                                                    color: '#12e2ff'
                                                 },
                                                 grid: {
-                                                    color: 'rgba(0, 0, 0, 0.05)'
+                                                    color: 'rgba(36, 48, 73, 0.65)'
                                                 },
                                                 ticks: {
-                                                    color: '#667eea',
+                                                    color: '#12e2ff',
                                                     font: {
                                                         size: 12,
                                                         weight: '600'
@@ -1443,13 +1433,13 @@
                                                         size: 14,
                                                         weight: 'bold'
                                                     },
-                                                    color: '#10b981'
+                                                    color: '#00f5a0'
                                                 },
                                                 grid: {
                                                     drawOnChartArea: false
                                                 },
                                                 ticks: {
-                                                    color: '#10b981',
+                                                    color: '#00f5a0',
                                                     font: {
                                                         size: 12,
                                                         weight: '600'
@@ -1476,134 +1466,138 @@
         </div>
 
     {% elif section == 'live_market' %}
-        <div class="container">
+        <div class="container live-market-page">
             <nav class="navbar navbar-expand-lg">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>CoinPrep</a>
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
                 <div class="navbar-nav ms-auto">
                     <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-wallet"></i>Portfolio</a>
                     <a class="nav-link" href="{{ url_for('orders') }}"><i class="fas fa-list-ul"></i>Orders</a>
                     <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
                     <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
-                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-chart-line"></i>Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achievements</a>
+                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-chart-line"></i>Risk</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achieve</a>
                     <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">LIVE MARKET</h1>
+                <p class="text-muted" style="margin:0;">Real-time cryptocurrency prices</p>
+            </div>
             
-            <div class="dashboard-card">
-                <h3><i class="fas fa-chart-line"></i>Live Cryptocurrency Market</h3>
-                <div class="table-wrapper">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Coin</th>
-                                <th>Symbol</th>
-                                <th>Price (USD)</th>
-                                <th>24h Change</th>
-                                <th>Market Cap</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if coins %}
-                                {% for coin in coins %}
-                                    <tr>
-                                        <td><strong>{{ coin.name }}</strong></td>
-                                        <td>{{ coin.symbol.upper() }}</td>
-                                        <td><strong>${{ coin.current_price | round(2) }}</strong></td>
-                                        <td class="{% if coin.price_change_percentage_24h > 0 %}price-positive{% else %}price-negative{% endif %}">
-                                            {% if coin.price_change_percentage_24h > 0 %}
-                                                <i class="fas fa-arrow-up"></i>
-                                            {% else %}
-                                                <i class="fas fa-arrow-down"></i>
-                                            {% endif %}
-                                            {{ coin.price_change_percentage_24h | round(2) }}%
-                                        </td>
-                                        <td>${{ "{:,.0f}".format(coin.market_cap) }}</td>
-                                        <td>
-                                            <form method="POST" action="{{ url_for('trade') }}" class="trade-form-compact">
-                                                <input type="hidden" name="coin_id" value="{{ coin.id }}">
-                                                <input type="hidden" name="current_price" value="{{ coin.current_price }}">
-                                                <input type="hidden" name="source" value="live_market">
-                                                
-                                                <div class="mb-2">
-                                                    <label class="form-label small mb-1"><strong>Order Type:</strong></label>
-                                                    <select name="order_type" class="form-select form-select-sm" id="order_type_{{ coin.id }}" onchange="updateOrderFields('{{ coin.id }}')">
-                                                        <option value="market">💨 Market (Instant)</option>
-                                                        <option value="limit">⏰ Limit (Wait for Price)</option>
-                                                        <option value="stop_loss">🛑 Stop Loss (Protect)</option>
-                                                        <option value="take_profit">🎯 Take Profit (Lock Gains)</option>
-                                                    </select>
-                                                    <small class="text-muted d-block mt-1" id="order_help_{{ coin.id }}">Executes immediately at market price</small>
-                                                </div>
-                                                
-                                                <div class="input-group input-group-sm mb-2">
-                                                    <input type="number" class="form-control" name="amount" placeholder="Amount" step="0.00000001" required>
-                                                    <select name="wallet_id" class="form-select" required>
-                                                        <option value="" disabled selected>Wallet</option>
-                                                        {% if wallets %}
-                                                            {% for wallet in wallets %}
-                                                                <option value="{{ wallet.id }}">{{ wallet.name }}</option>
-                                                            {% endfor %}
-                                                        {% endif %}
-                                                    </select>
-                                                </div>
-                                                
-                                                <div class="mb-2" id="quote_currency_{{ coin.id }}" style="display:block;">
-                                                    <label class="form-label small mb-1"><strong>Pay With:</strong></label>
-                                                    <select name="quote_currency" class="form-select form-select-sm">
-                                                        <option value="cryptobucks">💵 CryptoBucks ({{ user_balances.crypto_bucks|round(2) }})</option>
-                                                        <option value="tether" {% if coin.id != 'tether' %}selected{% endif %}>💰 USDT ({{ user_balances.tether|round(2) }})</option>
-                                                    </select>
-                                                </div>
-                                                
-                                                <div class="mb-2" id="limit_price_{{ coin.id }}" style="display:none;">
-                                                    <label class="form-label small mb-1"><strong>Limit Price ($):</strong></label>
-                                                    <input type="number" class="form-control form-control-sm" name="limit_price" placeholder="Enter target price" step="0.01">
-                                                    <small class="text-muted">Order executes when price reaches this level</small>
-                                                </div>
-                                                
-                                                <div class="mb-2" id="stop_price_{{ coin.id }}" style="display:none;">
-                                                    <label class="form-label small mb-1"><strong>Stop Price ($):</strong></label>
-                                                    <input type="number" class="form-control form-control-sm" name="stop_price" placeholder="Enter trigger price" step="0.01">
-                                                    <small class="text-muted d-block" id="stop_help_{{ coin.id }}"></small>
-                                                </div>
-                                                
-                                                <div class="btn-group btn-group-sm w-100">
-                                                    <button type="submit" name="action" value="buy" class="btn btn-success">Buy</button>
-                                                    <button type="submit" name="action" value="sell" class="btn btn-danger">Sell</button>
-                                                </div>
-                                            </form>
-                                            <div class="d-flex gap-1 mt-2">
-                                                <button class="btn btn-sm btn-info flex-fill" onclick="showLiveMarketChart('{{ coin.id }}'); return false;">
-                                                    <i class="fas fa-chart-line"></i> Chart
-                                                </button>
-                                                <button class="btn btn-sm btn-ai-advisor flex-fill ai-advice-btn"
-                                                    data-coin-id="{{ coin.id }}"
-                                                    data-coin-name="{{ coin.name }}"
-                                                    data-price="{{ coin.current_price }}"
-                                                    data-change="{{ coin.price_change_percentage_24h | default(0) }}"
-                                                    id="ai-btn-{{ coin.id }}">
-                                                    <i class="fas fa-robot"></i> AI Advisor
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="6" class="text-center">
-                                        <div class="empty-state">
-                                            <i class="fas fa-coins"></i>
-                                            <h4>No Market Data Available</h4>
-                                            <p>Please refresh the page to load market data</p>
+            <div class="dashboard-card market-data-shell">
+                <h3><i class="fas fa-store"></i> MARKET DATA</h3>
+
+                {% if coins %}
+                    <div class="market-rows">
+                        {% for coin in coins %}
+                            <div class="market-row">
+                                <div class="market-col coin-col">
+                                    <div class="col-label">COIN</div>
+                                    <div class="coin-name">{{ coin.name }}</div>
+                                    <div class="coin-symbol">{{ coin.symbol.upper() }}</div>
+                                </div>
+
+                                <div class="market-col">
+                                    <div class="col-label">PRICE</div>
+                                    <div class="col-value">${{ coin.current_price | round(2) }}</div>
+                                </div>
+
+                                <div class="market-col">
+                                    <div class="col-label">24H</div>
+                                    <div class="col-value {% if coin.price_change_percentage_24h > 0 %}price-positive{% else %}price-negative{% endif %}">
+                                        <i class="fas fa-{% if coin.price_change_percentage_24h > 0 %}arrow-up{% else %}arrow-down{% endif %}"></i>
+                                        {{ coin.price_change_percentage_24h | round(2) }}%
+                                    </div>
+                                </div>
+
+                                <div class="market-col">
+                                    <div class="col-label">MCAP</div>
+                                    <div class="col-value">
+                                        {% if coin.market_cap >= 1000000000000 %}
+                                            ${{ '%.2f'|format(coin.market_cap / 1000000000000) }}T
+                                        {% elif coin.market_cap >= 1000000000 %}
+                                            ${{ '%.2f'|format(coin.market_cap / 1000000000) }}B
+                                        {% elif coin.market_cap >= 1000000 %}
+                                            ${{ '%.2f'|format(coin.market_cap / 1000000) }}M
+                                        {% else %}
+                                            ${{ '{:,.0f}'.format(coin.market_cap) }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <form method="POST" action="{{ url_for('trade') }}" class="market-trade-form">
+                                    <input type="hidden" name="coin_id" value="{{ coin.id }}">
+                                    <input type="hidden" name="current_price" value="{{ coin.current_price }}">
+                                    <input type="hidden" name="source" value="live_market">
+
+                                    <select name="order_type" class="form-select form-select-sm order-type-select" id="order_type_{{ coin.id }}" onchange="updateOrderFields('{{ coin.id }}')">
+                                        <option value="market">MKT</option>
+                                        <option value="limit">LMT</option>
+                                        <option value="stop_loss">STP</option>
+                                        <option value="take_profit">TP</option>
+                                    </select>
+
+                                    <input type="number" class="form-control form-control-sm amount-input" name="amount" placeholder="Amount" step="0.00000001" required>
+
+                                    <select name="wallet_id" class="form-select form-select-sm wallet-select" required>
+                                        <option value="" disabled selected>Wallet</option>
+                                        {% if wallets %}
+                                            {% for wallet in wallets %}
+                                                <option value="{{ wallet.id }}">{{ wallet.name }}</option>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </select>
+
+                                    <button type="submit" name="action" value="buy" class="btn btn-sm btn-success">
+                                        <i class="fas fa-cart-plus"></i> BUY
+                                    </button>
+                                    <button type="submit" name="action" value="sell" class="btn btn-sm btn-danger">SELL</button>
+
+                                    <div class="advanced-fields">
+                                        <div id="quote_currency_{{ coin.id }}" style="display:block;">
+                                            <select name="quote_currency" class="form-select form-select-sm quote-select">
+                                                <option value="cryptobucks">CryptoBucks ({{ user_balances.crypto_bucks|round(2) }})</option>
+                                                <option value="tether" {% if coin.id != 'tether' %}selected{% endif %}>USDT ({{ user_balances.tether|round(2) }})</option>
+                                            </select>
                                         </div>
-                                    </td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
-                </div>
+
+                                        <div id="limit_price_{{ coin.id }}" style="display:none;">
+                                            <input type="number" class="form-control form-control-sm" name="limit_price" placeholder="Limit price" step="0.01">
+                                        </div>
+
+                                        <div id="stop_price_{{ coin.id }}" style="display:none;">
+                                            <input type="number" class="form-control form-control-sm" name="stop_price" placeholder="Stop price" step="0.01">
+                                            <small class="text-muted d-block" id="stop_help_{{ coin.id }}"></small>
+                                        </div>
+
+                                        <small class="text-muted d-block" id="order_help_{{ coin.id }}">Executes immediately at market price</small>
+                                    </div>
+                                </form>
+
+                                <div class="market-actions">
+                                    <button class="btn btn-sm btn-info" onclick="showLiveMarketChart('{{ coin.id }}'); return false;">
+                                        <i class="fas fa-chart-line"></i> Chart
+                                    </button>
+                                    <button class="btn btn-sm btn-ai-advisor ai-advice-btn"
+                                        data-coin-id="{{ coin.id }}"
+                                        data-coin-name="{{ coin.name }}"
+                                        data-price="{{ coin.current_price }}"
+                                        data-change="{{ coin.price_change_percentage_24h | default(0) }}"
+                                        id="ai-btn-{{ coin.id }}">
+                                        <i class="fas fa-robot"></i> AI Advisor
+                                    </button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-coins"></i>
+                        <h4>No Market Data Available</h4>
+                        <p>Please refresh the page to load market data</p>
+                    </div>
+                {% endif %}
             </div>
             
             {% if section == 'live_market' %}
@@ -1632,24 +1626,57 @@
                 </nav>
             {% endif %}
             
-            <div class="chart-container" id="liveMarketChartContainer" style="opacity: 0; transition: opacity 0.3s;">
-                <canvas id="liveMarketChart"></canvas>
+            <div class="modal fade" id="liveMarketChartModal" tabindex="-1" aria-labelledby="liveMarketChartModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-centered">
+                    <div class="modal-content live-chart-modal-content">
+                        <div class="modal-header live-chart-modal-header">
+                            <h5 class="modal-title" id="liveMarketChartModalLabel"><i class="fas fa-chart-line"></i> MARKET CHART</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body live-chart-modal-body">
+                            <div id="liveMarketChartLoading" class="live-chart-loading" style="display:none;">
+                                <i class="fas fa-spinner fa-spin"></i> Loading chart...
+                            </div>
+                            <canvas id="liveMarketChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <script>
                 (function() {
                     let liveMarketChartInstance = null;
+                    const liveMarketChartModalElement = document.getElementById('liveMarketChartModal');
+                    const liveMarketChartLoading = document.getElementById('liveMarketChartLoading');
+                    const liveMarketChartModal = liveMarketChartModalElement ? new bootstrap.Modal(liveMarketChartModalElement) : null;
+
+                    if (liveMarketChartModalElement) {
+                        liveMarketChartModalElement.addEventListener('hidden.bs.modal', function() {
+                            if (liveMarketChartInstance) {
+                                liveMarketChartInstance.destroy();
+                                liveMarketChartInstance = null;
+                            }
+                        });
+                    }
                     
                     window.showLiveMarketChart = function(coinId) {
-                        const chartContainer = document.getElementById('liveMarketChartContainer');
-                        chartContainer.style.opacity = '0.5';
+                        if (!liveMarketChartModal) {
+                            return;
+                        }
+
+                        liveMarketChartModal.show();
+                        if (liveMarketChartLoading) {
+                            liveMarketChartLoading.style.display = 'block';
+                        }
                         
                         fetch(`/historical/${coinId}`)
                             .then(response => response.json())
                             .then(data => {
                                 if (data.error) {
                                     alert(data.error);
-                                    chartContainer.style.opacity = '1';
+                                    if (liveMarketChartLoading) {
+                                        liveMarketChartLoading.style.display = 'none';
+                                    }
                                     return;
                                 }
                                 
@@ -1802,11 +1829,15 @@
                                         }
                                     }
                                 });
-                                
-                                chartContainer.style.opacity = '1';
+
+                                if (liveMarketChartLoading) {
+                                    liveMarketChartLoading.style.display = 'none';
+                                }
                             })
                             .catch(error => {
-                                chartContainer.style.opacity = '1';
+                                if (liveMarketChartLoading) {
+                                    liveMarketChartLoading.style.display = 'none';
+                                }
                                 console.error('Error fetching chart data:', error);
                                 alert('Failed to load chart data. Please try again.');
                             });
@@ -1946,7 +1977,22 @@
                                     </ul>
                                 </div>
 
-                                <div class="row g-3 mb-3">
+                                <div class="ai-section mb-3" id="ai-market-situation-section" style="display:none;">
+                                    <h6><i class="fas fa-wave-square" style="color: #38bdf8;"></i> Market Story</h6>
+                                    <p id="ai-market-situation" class="mb-0"></p>
+                                </div>
+
+                                <div class="ai-section mb-3" id="ai-watch-section" style="display:none;">
+                                    <h6><i class="fas fa-binoculars" style="color: #f59e0b;"></i> What To Watch (IMPORTANT)</h6>
+                                    <p id="ai-what-to-watch" class="mb-0"></p>
+                                </div>
+
+                                <div class="ai-section mb-3" id="ai-timing-section" style="display:none;">
+                                    <h6><i class="fas fa-clock" style="color: #f59e0b;"></i> Timing Insight</h6>
+                                    <p id="ai-timing-insight" class="mb-0"></p>
+                                </div>
+
+                                <div class="row g-3 mb-3" id="ai-legacy-insight-row" style="display:none;">
                                     <div class="col-md-6">
                                         <div class="ai-section h-100">
                                             <h6><i class="fas fa-circle-check" style="color: #10b981;"></i> Why Consider Buying</h6>
@@ -1960,8 +2006,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
-                                <!-- Risk Warning -->
+
                                 <div class="ai-section ai-warning-section mb-3" id="ai-warning-section" style="display:none;">
                                     <h6><i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> Risk Warning</h6>
                                     <p id="ai-risk-warning" class="mb-0"></p>
@@ -2158,6 +2203,12 @@
                     border: 2px solid rgba(234, 179, 8, 0.4);
                     box-shadow: 0 0 30px rgba(234, 179, 8, 0.2);
                 }
+                .ai-decision-badge.avoid {
+                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(239, 68, 68, 0.12));
+                    color: #ef4444;
+                    border: 2px solid rgba(239, 68, 68, 0.45);
+                    box-shadow: 0 0 30px rgba(239, 68, 68, 0.2);
+                }
                 
                 .ai-confidence {
                     font-size: 0.9rem;
@@ -2247,20 +2298,20 @@
                     font-weight: bold;
                 }
                 
-                .ai-warning-section {
-                    border-color: rgba(239, 68, 68, 0.2);
-                    background: rgba(239, 68, 68, 0.05);
-                }
-                .ai-warning-section p {
-                    color: #fca5a5;
-                    font-size: 0.9rem;
-                }
                 .ai-tip-section {
                     border-color: rgba(16, 185, 129, 0.2);
                     background: rgba(16, 185, 129, 0.05);
                 }
                 .ai-tip-section p {
                     color: #6ee7b7;
+                    font-size: 0.9rem;
+                }
+                .ai-warning-section {
+                    border-color: rgba(239, 68, 68, 0.2);
+                    background: rgba(239, 68, 68, 0.05);
+                }
+                .ai-warning-section p {
+                    color: #fca5a5;
                     font-size: 0.9rem;
                 }
                 
@@ -2363,6 +2414,7 @@
                     badge.className = 'ai-decision-badge';
                     if (decision === 'BUY') badge.classList.add('buy');
                     else if (decision === 'WAIT') badge.classList.add('wait');
+                    else if (decision === 'AVOID') badge.classList.add('avoid');
                     else badge.classList.add('caution');
                     
                     // Confidence
@@ -2380,7 +2432,9 @@
                     
                     const trendEl = document.getElementById('ai-trend');
                     trendEl.textContent = md.trend || '—';
-                    trendEl.style.color = md.trend === 'Bullish' ? '#10b981' : '#ef4444';
+                    if (md.trend === 'Bullish' || md.trend === 'Uptrend') trendEl.style.color = '#10b981';
+                    else if (md.trend === 'Bearish' || md.trend === 'Downtrend') trendEl.style.color = '#ef4444';
+                    else trendEl.style.color = '#f59e0b';
                     
                     document.getElementById('ai-prediction').textContent = (md.prediction || 50).toFixed(1) + '%';
                     document.getElementById('ai-pred-bar').style.width = (md.prediction || 50) + '%';
@@ -2406,23 +2460,49 @@
                         reasoningList.appendChild(li);
                     }
 
-                    // Why buy / why wait sections
-                    renderBulletList('ai-why-buy-list', data.parsed?.why_buy, [
-                        'Trend and momentum suggest potential upside if risk is managed.',
-                        'Prediction and current structure support a possible entry setup.'
-                    ]);
-                    renderBulletList('ai-why-not-buy-list', data.parsed?.why_not_buy, [
-                        'Signals are not fully aligned, so entry timing risk is still present.',
-                        'Waiting for stronger confirmation can improve risk-reward.'
-                    ]);
+                    // Market Situation
+                    const marketSituationSection = document.getElementById('ai-market-situation-section');
+                    const marketSituationText = data.parsed?.market_situation || data.market_data?.market_summary || '';
+                    if (marketSituationText) {
+                        marketSituationSection.style.display = 'block';
+                        document.getElementById('ai-market-situation').textContent = marketSituationText;
+                    } else {
+                        marketSituationSection.style.display = 'none';
+                    }
 
-                    // Signal score graph
-                    renderSignalScoreGraph(data.market_data?.signal_scores || {});
+                    // Timing Insight
+                    const timingSection = document.getElementById('ai-timing-section');
+                    const timingText = data.parsed?.timing_insight || '';
+                    if (timingText) {
+                        timingSection.style.display = 'block';
+                        document.getElementById('ai-timing-insight').textContent = timingText;
+                    } else {
+                        timingSection.style.display = 'none';
+                    }
 
-                    // Historical context graph (price + volume + current price line)
-                    renderPhase1MarketContextChart(md.coin, Number(md.price || 0));
-                    
-                    // Risk warning
+                    // What To Watch
+                    const watchSection = document.getElementById('ai-watch-section');
+                    const watchText = data.parsed?.what_to_watch || '';
+                    if (watchText) {
+                        watchSection.style.display = 'block';
+                        document.getElementById('ai-what-to-watch').textContent = watchText;
+                    } else {
+                        watchSection.style.display = 'none';
+                    }
+
+                    // Legacy insight sections (shown only if present)
+                    const whyBuy = data.parsed?.why_buy || [];
+                    const whyNot = data.parsed?.why_not_buy || [];
+                    const legacyRow = document.getElementById('ai-legacy-insight-row');
+                    const hasLegacyLists = (whyBuy && whyBuy.length) || (whyNot && whyNot.length);
+                    if (hasLegacyLists) {
+                        legacyRow.style.display = 'flex';
+                        renderBulletList('ai-why-buy-list', whyBuy, []);
+                        renderBulletList('ai-why-not-buy-list', whyNot, []);
+                    } else {
+                        legacyRow.style.display = 'none';
+                    }
+
                     const warningSection = document.getElementById('ai-warning-section');
                     const warningText = data.parsed?.risk_warning || '';
                     if (warningText) {
@@ -2431,6 +2511,12 @@
                     } else {
                         warningSection.style.display = 'none';
                     }
+
+                    // Signal score graph
+                    renderSignalScoreGraph(data.market_data?.signal_scores || {});
+
+                    // Historical context graph (price + volume + current price line)
+                    renderPhase1MarketContextChart(md.coin, Number(md.price || 0));
                     
                     // Beginner tip
                     const tipSection = document.getElementById('ai-tip-section');
@@ -2452,8 +2538,8 @@
                     if (!list) return;
                     list.innerHTML = '';
 
-                    const values = (items && items.length ? items : fallbackItems).slice(0, 4);
-                    values.forEach(text => {
+                    const source = (items && items.length) ? items : (fallbackItems || []);
+                    source.slice(0, 4).forEach(text => {
                         const li = document.createElement('li');
                         li.textContent = text;
                         list.appendChild(li);
@@ -2628,21 +2714,26 @@
     {% elif section == 'orders' %}
         <div class="container">
             <nav class="navbar navbar-expand-lg">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>CoinPrep</a>
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
                 <div class="navbar-nav ms-auto">
-                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Live Market</a>
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Market</a>
                     <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-wallet"></i>Portfolio</a>
                     <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
                     <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
                     <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">ORDERS</h1>
+                <p class="text-muted" style="margin:0;">Pending & completed orders</p>
+            </div>
             
             <div class="dashboard-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3><i class="fas fa-list-ul"></i>My Trading Orders</h3>
+                    <h3><i class="fas fa-list-ul"></i> OPEN ORDERS</h3>
                     <a href="{{ url_for('check_orders_now') }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-sync-alt"></i> Check Orders Now
+                        <i class="fas fa-sync-alt"></i> CHECK ORDERS
                     </a>
                 </div>
                 
@@ -2706,14 +2797,14 @@
                     </div>
                     {% else %}
                     <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> No open orders. Visit the <a href="{{ url_for('live_market') }}">Live Market</a> to place your first order!
+                        <i class="fas fa-info-circle"></i> No open orders. Visit the <a href="{{ url_for('live_market') }}">Market</a> to place your first order!
                     </div>
                     {% endif %}
                 </div>
                 
                 <!-- Order History -->
                 <div>
-                    <h4 class="mb-3"><i class="fas fa-history"></i> Order History</h4>
+                    <h4 class="mb-3"><i class="fas fa-history"></i> ORDER HISTORY</h4>
                     {% if order_history %}
                     <div class="table-wrapper">
                         <table class="table">
@@ -2775,21 +2866,26 @@
     {% elif section == 'portfolio' %}
         <div class="container">
             <nav class="navbar navbar-expand-lg">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>CoinPrep</a>
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
                 <div class="navbar-nav ms-auto">
-                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Live Market</a>
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Market</a>
                     <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
                     <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
-                    <a class="nav-link" href="{{ url_for('backtester') }}"><i class="fas fa-flask"></i>Backtester</a>
-                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-question-circle"></i>Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achievements</a>
+                    <a class="nav-link" href="{{ url_for('backtester') }}"><i class="fas fa-flask"></i>Backtest</a>
+                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-question-circle"></i>Risk</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achieve</a>
                     <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">PORTFOLIO</h1>
+                <p class="text-muted" style="margin:0;">Your crypto holdings & risk analysis</p>
+            </div>
             
             <!-- Portfolio Summary -->
             <div class="dashboard-card">
-                <h3><i class="fas fa-chart-pie"></i>Portfolio Summary</h3>
+                <h3><i class="fas fa-chart-pie"></i> PORTFOLIO OVERVIEW</h3>
                 <div class="row">
                     <div class="col-md-4">
                         <div class="stat-card">
@@ -2820,7 +2916,7 @@
             </div>
             
             <div class="dashboard-card">
-                <h3><i class="fas fa-plus-circle"></i>Add to Portfolio</h3>
+                <h3><i class="fas fa-plus-circle"></i> ADD HOLDING</h3>
                 <form method="POST" action="{{ url_for('portfolio') }}">
                     <div class="row g-3">
                         <div class="col-md-3">
@@ -2856,17 +2952,17 @@
                 <ul class="nav nav-tabs mb-3" id="portfolioTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="holdings-tab" data-bs-toggle="tab" data-bs-target="#holdings" type="button">
-                            <i class="fas fa-coins"></i> Holdings (Avg Price)
+                            <i class="fas fa-coins"></i> HOLDINGS
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button">
-                            <i class="fas fa-history"></i> Trade History
+                            <i class="fas fa-history"></i> TRADE HISTORY
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button">
-                            <i class="fas fa-list"></i> Transaction Details
+                            <i class="fas fa-list"></i> TX DETAILS
                         </button>
                     </li>
                 </ul>
@@ -3849,16 +3945,21 @@
     {% elif section == 'watchlist' %}
         <div class="container">
             <nav class="navbar navbar-expand-lg">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>CoinPrep</a>
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
                 <div class="navbar-nav ms-auto">
-                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Live Market</a>
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Market</a>
                     <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-wallet"></i>Portfolio</a>
-                    <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Price Alerts</a>
-                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-question-circle"></i>Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achievements</a>
+                    <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
+                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-question-circle"></i>Risk</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achieve</a>
                     <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">WATCHLIST</h1>
+                <p class="text-muted" style="margin:0;">Track your favorite coins</p>
+            </div>
             
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -3878,10 +3979,9 @@
             {% endwith %}
             
             <div class="dashboard-card">
-                <h3><i class="fas fa-plus-circle"></i>Add Coin to Watchlist</h3>
+                <h3><i class="fas fa-plus-circle"></i> ADD TO WATCHLIST</h3>
                 <form method="POST" action="{{ url_for('watchlist') }}">
                     <div class="row g-3">
-                        <div class="col-md-10">
                         <div class="col-md-10">
                             {% if available_coins and available_coins|length > 0 %}
                                 <select name="coin_id" class="form-select" required>
@@ -3908,7 +4008,7 @@
             </div>
             
             <div class="dashboard-card">
-                <h3><i class="fas fa-star"></i>Watched Coins</h3>
+                <h3><i class="fas fa-star"></i> WATCHED COINS</h3>
                 <div class="table-wrapper">
                     <table class="table">
                         <thead>
@@ -4175,21 +4275,25 @@
     {% elif section == 'alerts' %}
         <div class="container">
             <nav class="navbar navbar-expand-lg">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>CoinPrep</a>
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
                 <div class="navbar-nav ms-auto">
-                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Live Market</a>
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-chart-line"></i>Market</a>
                     <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-wallet"></i>Portfolio</a>
                     <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
-                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-question-circle"></i>Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achievements</a>
+                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-question-circle"></i>Risk</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achieve</a>
                     <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">PRICE ALERTS</h1>
+                <p class="text-muted" style="margin:0;">Set alerts for price movements</p>
+            </div>
             
             <div class="dashboard-card">
-                <h3><i class="fas fa-bell"></i>Set New Price Alert</h3>
+                <h3><i class="fas fa-plus"></i> NEW ALERT</h3>
                 <form method="POST" action="{{ url_for('alerts') }}">
-                    <div class="row g-3">
                     <div class="row g-3">
                         <div class="col-md-3">
                             {% if available_coins and available_coins|length > 0 %}
@@ -4220,14 +4324,14 @@
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary w-100"><i class="fas fa-bell"></i> Set Alert</button>
+                            <button type="submit" class="btn btn-primary w-100"><i class="fas fa-plus"></i> CREATE</button>
                         </div>
                     </div>
                 </form>
             </div>
             
             <div class="dashboard-card">
-                <h3><i class="fas fa-list"></i>Your Price Alerts</h3>
+                <h3><i class="fas fa-bell"></i> ACTIVE ALERTS</h3>
                 <div class="table-wrapper">
                     <table class="table">
                         <thead>
@@ -4280,7 +4384,7 @@
                                     <td colspan="6" class="text-center">
                                         <div class="empty-state">
                                             <i class="fas fa-bell-slash"></i>
-                                            <h4>No Active Alerts</h4>
+                                            <h4>No active alerts</h4>
                                             <p>Set price alerts to get notified when cryptocurrencies reach your target price</p>
                                         </div>
                                     </td>
@@ -4306,23 +4410,27 @@
 
     {% elif section == 'risk_quiz' %}
         <div class="container">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-                <div class="navbar-nav">
-                    <a class="nav-link" href="{{ url_for('live_market') }}">Live Market</a>
-                    <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
-                    <a class="nav-link" href="{{ url_for('watchlist') }}">Watchlist</a>
-                    <a class="nav-link" href="{{ url_for('alerts') }}">Price Alerts</a>
-                    <a class="nav-link active" href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('achievements') }}">Achievements</a>
-                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            <nav class="navbar navbar-expand-lg mb-4">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-store"></i>Market</a>
+                    <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-briefcase"></i>Portfolio</a>
+                    <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
+                    <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achieve</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">RISK QUIZ</h1>
+                <p class="text-muted" style="margin:0;">Discover your risk tolerance</p>
+            </div>
             
             <div class="container mt-4">
                 <div class="card shadow">
                     <div class="card-header bg-primary text-white">
-                        <h2 class="mb-0">Investment Risk Tolerance Assessment</h2>
+                        <h2 class="mb-0">RISK ASSESSMENT</h2>
                     </div>
                     <div class="card-body">
                         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -4413,23 +4521,27 @@
             
     {% elif section == 'risk_quiz_result' %}
         <div class="container">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-                <div class="navbar-nav">
-                    <a class="nav-link" href="{{ url_for('live_market') }}">Live Market</a>
-                    <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
-                    <a class="nav-link" href="{{ url_for('watchlist') }}">Watchlist</a>
-                    <a class="nav-link" href="{{ url_for('alerts') }}">Price Alerts</a>
-                    <a class="nav-link active" href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('achievements') }}">Achievements</a>
-                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            <nav class="navbar navbar-expand-lg mb-4">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-store"></i>Market</a>
+                    <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-briefcase"></i>Portfolio</a>
+                    <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
+                    <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achieve</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">RISK QUIZ</h1>
+                <p class="text-muted" style="margin:0;">Discover your risk tolerance</p>
+            </div>
             
             <div class="container mt-4">
                 <div class="card shadow">
                     <div class="card-header bg-primary text-white">
-                        <h2 class="mb-0">Your Risk Profile Assessment</h2>
+                        <h2 class="mb-0">RISK ASSESSMENT RESULT</h2>
                     </div>
                     <div class="card-body">
                         <div class="text-center mb-5">
@@ -4534,7 +4646,7 @@
                                 <i class="bi bi-printer"></i> Print Your Results
                             </button>
                             <a href="{{ url_for('dashboard') }}" class="btn btn-primary ms-2">
-                                <i class="bi bi-house"></i> Back to Dashboard
+                                <i class="bi bi-house"></i> DASHBOARD
                             </a>
                         </div>
                     </div>
@@ -4613,18 +4725,23 @@
             
     {% elif section == 'achievements' %}
         <div class="container">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
-                <a class="navbar-brand" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-                <div class="navbar-nav">
-                    <a class="nav-link" href="{{ url_for('live_market') }}">Live Market</a>
-                    <a class="nav-link" href="{{ url_for('portfolio') }}">Portfolio</a>
-                    <a class="nav-link" href="{{ url_for('watchlist') }}">Watchlist</a>
-                    <a class="nav-link" href="{{ url_for('alerts') }}">Price Alerts</a>
-                    <a class="nav-link" href="{{ url_for('risk_quiz') }}">Risk Quiz</a>
-                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            <nav class="navbar navbar-expand-lg mb-4">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-store"></i>Market</a>
+                    <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-briefcase"></i>Portfolio</a>
+                    <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
+                    <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
+                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-shield-alt"></i>Risk</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
                 </div>
             </nav>
-            <h2>Achievements</h2>
+
+            <div class="mb-4">
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">ACHIEVEMENTS</h1>
+                <p class="text-muted" style="margin:0;">Unlock progress-based milestones</p>
+            </div>
+
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -4635,7 +4752,7 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            <h3>Add Achievement</h3>
+            <h3>ADD ACHIEVEMENT</h3>
             <form method="POST" action="{{ url_for('update_achievements') }}">
                 <div class="input-group mb-3">
                     <input type="text" class="form-control" name="achievement" placeholder="Achievement name" required>
