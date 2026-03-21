@@ -59,26 +59,31 @@ def _load_local_env_file():
 _load_local_env_file()
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.getenv('SECRET_KEY') or os.urandom(24)
 bcrypt = Bcrypt(app)
 
 # Email Configuration
 EMAIL_CONFIG = {
-    'MAIL_SERVER': 'smtp.gmail.com',  # Using Gmail SMTP server
-    'MAIL_PORT': 587,
-    'MAIL_USE_TLS': True,
-    'MAIL_USERNAME': 'frozenflames677@gmail.com',  # Replace with your email
-    'MAIL_PASSWORD': 'auhe hrhm cfix hjii',     # Use App Password if 2FA is enabled
-    'MAIL_DEFAULT_SENDER': 'frozenflames677@gmail.com'  # Replace with your email
+    'MAIL_SERVER': os.getenv('MAIL_SERVER', 'smtp.gmail.com'),
+    'MAIL_PORT': int(os.getenv('MAIL_PORT', '587')),
+    'MAIL_USE_TLS': os.getenv('MAIL_USE_TLS', 'true').strip().lower() in ('1', 'true', 'yes', 'on'),
+    'MAIL_USERNAME': os.getenv('MAIL_USERNAME', ''),
+    'MAIL_PASSWORD': os.getenv('MAIL_PASSWORD', ''),
+    'MAIL_DEFAULT_SENDER': os.getenv('MAIL_DEFAULT_SENDER', os.getenv('MAIL_USERNAME', ''))
 }
 
 # MySQL Configuration
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'Pranavrh123$',
-    'database': 'crypto_tracker'
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', '3306')),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_NAME', 'crypto_tracker')
 }
+
+# Enable SSL for remote database connections (e.g. Aiven)
+if db_config['host'] not in ('localhost', '127.0.0.1'):
+    db_config['ssl_disabled'] = False
 
 # CoinGecko API
 COINGECKO_API = "https://api.coingecko.com/api/v3"
@@ -2346,6 +2351,10 @@ except Exception as e:
 
 if __name__ == '__main__':
     try:
-        app.run(debug=True)
+        app.run(
+            host='0.0.0.0',
+            port=int(os.getenv('PORT', '5000')),
+            debug=os.getenv('FLASK_DEBUG', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
+        )
     except (KeyboardInterrupt, SystemExit):
         scheduler.shutdown()
