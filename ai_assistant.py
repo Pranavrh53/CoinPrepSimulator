@@ -6,6 +6,7 @@ Uses ChromaDB for vector storage and Claude/Gemini for responses
 import os
 import json
 import time
+import re
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 import chromadb
@@ -696,6 +697,23 @@ STRICT:
     
     def _parse_trade_advice(self, response_text: str) -> Dict:
         """Parse structured advice from AI response"""
+        def normalize_confidence(raw: str) -> str:
+            c = (raw or "").strip().lower()
+            if any(token in c for token in ["high", "hgh", "hig"]):
+                return "High"
+            if any(token in c for token in ["low", "lw"]):
+                return "Low"
+            if any(token in c for token in ["medium", "med", "mde", "mdi", "mid"]):
+                return "Medium"
+            return "Medium"
+
+        def normalize_line(raw: str) -> str:
+            line = (raw or "").strip()
+            # Remove common markdown wrappers like **Decision:** and list prefixes.
+            line = line.replace("**", "").replace("__", "").strip()
+            line = re.sub(r"^[\-•\*\s]+", "", line)
+            return line.strip()
+
         parsed = {
             "decision": "WAIT",
             "confidence": "Medium",
@@ -711,53 +729,64 @@ STRICT:
         
         lines = response_text.strip().split('\n')
         current_section = None
+        saw_decision_line = False
+        saw_confidence_line = False
         
-        for line in lines:
-            line = line.strip()
+        for raw_line in lines:
+            line = normalize_line(raw_line)
             if not line:
                 continue
+            lower_line = line.lower()
             
             # Parse Decision
-            if line.lower().startswith('decision:'):
-                decision = line.split(':', 1)[1].strip().upper()
-                if 'AVOID' in decision:
+            if lower_line.startswith('decision'):
+                saw_decision_line = True
+                decision = line.split(':', 1)[1].strip().upper() if ':' in line else line[len('decision'):].strip().upper()
+
+                # Ignore template placeholder like "(BUY / WAIT / AVOID)"
+                if re.fullmatch(r"\(?\s*BUY\s*/\s*WAIT\s*/\s*AVOID\s*\)?", decision):
+                    current_section = None
+                    continue
+
+                if '/' not in decision and re.search(r"\bAVOID\b", decision):
                     parsed['decision'] = 'AVOID'
-                elif 'BUY' in decision and 'WAIT' not in decision and 'AVOID' not in decision:
+                elif '/' not in decision and re.search(r"\bBUY\b", decision):
                     parsed['decision'] = 'BUY'
-                else:
+                elif '/' not in decision and re.search(r"\bWAIT\b", decision):
                     parsed['decision'] = 'WAIT'
+                else:
+                    m = re.search(r"\b(BUY|WAIT|AVOID)\b", decision)
+                    if m:
+                        parsed['decision'] = m.group(1)
                 current_section = None
                     
             # Parse Confidence
-            elif line.lower().startswith('confidence:'):
-                conf = line.split(':', 1)[1].strip().lower()
-                if 'high' in conf:
-                    parsed['confidence'] = 'High'
-                elif 'low' in conf:
-                    parsed['confidence'] = 'Low'
-                else:
-                    parsed['confidence'] = 'Medium'
+            elif lower_line.startswith('confidence:'):
+                saw_confidence_line = True
+                conf = line.split(':', 1)[1].strip()
+                parsed['confidence'] = normalize_confidence(conf)
                 current_section = None
 
-            elif line.lower() == 'confidence:':
+            elif lower_line == 'confidence:':
+                saw_confidence_line = True
                 current_section = 'confidence'
                     
             # Section headers
-            elif 'market situation' in line.lower() or 'market story' in line.lower():
+            elif 'market situation' in lower_line or 'market story' in lower_line:
                 current_section = 'market_situation'
-            elif 'key reasoning' in line.lower() or 'why this decision' in line.lower():
+            elif 'key reasoning' in lower_line or 'why this decision' in lower_line:
                 current_section = 'reasoning'
-            elif 'what to watch' in line.lower():
+            elif 'what to watch' in lower_line:
                 current_section = 'what_to_watch'
-            elif 'timing insight' in line.lower():
+            elif 'timing insight' in lower_line:
                 current_section = 'timing_insight'
-            elif 'why consider buying' in line.lower():
+            elif 'why consider buying' in lower_line:
                 current_section = 'why_buy'
-            elif 'why not buy yet' in line.lower():
+            elif 'why not buy yet' in lower_line:
                 current_section = 'why_not_buy'
-            elif 'risk warning' in line.lower():
+            elif 'risk warning' in lower_line:
                 current_section = 'risk_warning'
-            elif 'beginner tip' in line.lower():
+            elif 'beginner tip' in lower_line:
                 current_section = 'beginner_tip'
                 
             # Parse content under sections
@@ -784,15 +813,24 @@ STRICT:
                 elif current_section == 'timing_insight':
                     parsed['timing_insight'] = line if not parsed['timing_insight'] else parsed['timing_insight'] + ' ' + line
                 elif current_section == 'confidence':
-                    conf = line.strip().lower()
-                    if 'high' in conf:
-                        parsed['confidence'] = 'High'
-                    elif 'low' in conf:
-                        parsed['confidence'] = 'Low'
-                    else:
-                        parsed['confidence'] = 'Medium'
+                    parsed['confidence'] = normalize_confidence(line)
                 elif current_section == 'beginner_tip':
                     parsed['beginner_tip'] = line if not parsed['beginner_tip'] else parsed['beginner_tip'] + ' ' + line
+
+        # Fallback inference: if explicit lines were malformed, infer from full response text.
+        text_upper = (response_text or "").upper()
+        if not saw_decision_line:
+            if re.search(r"\bDECISION\b[^\n]*\bAVOID\b", text_upper):
+                parsed['decision'] = 'AVOID'
+            elif re.search(r"\bDECISION\b[^\n]*\bBUY\b", text_upper):
+                parsed['decision'] = 'BUY'
+            elif re.search(r"\bDECISION\b[^\n]*\bWAIT\b", text_upper):
+                parsed['decision'] = 'WAIT'
+
+        if not saw_confidence_line:
+            m_conf = re.search(r"\bCONFIDENCE\b[^\n:]*:?\s*([^\n]+)", response_text or "", re.IGNORECASE)
+            if m_conf:
+                parsed['confidence'] = normalize_confidence(m_conf.group(1))
         
         return parsed
 

@@ -34,11 +34,18 @@ def _parse_trade_mistake_response(text):
     parsed = {
         'mistake_type': '',
         'confidence_score': '',
+        'entry_timing': '',
+        'market_condition_at_entry': '',
+        'why_result_happened': '',
+        'skill_vs_luck_meter': '',
+        'trade_quality_insight': '',
         'explanation': '',
         'what_went_well': '',
+        'risk_still_existed': '',
         'what_went_wrong': '',
-        'improvement_tip': ''
-        ,
+        'behavioral_insight': '',
+        'improvement_tip': '',
+        'repeat_or_improve': '',
         'action_plan': []
     }
 
@@ -64,17 +71,33 @@ def _parse_trade_mistake_response(text):
             parsed['mistake_type'] = line.split(':', 1)[1].strip()
         elif lower.startswith('confidence score:'):
             parsed['confidence_score'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('entry timing:'):
+            parsed['entry_timing'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('market condition at entry:'):
+            parsed['market_condition_at_entry'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('why this result happened:') or lower.startswith('outcome driver:'):
+            parsed['why_result_happened'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('skill vs luck meter:'):
+            parsed['skill_vs_luck_meter'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('trade quality insight:'):
+            parsed['trade_quality_insight'] = line.split(':', 1)[1].strip()
         elif lower.startswith('explanation:'):
             parsed['explanation'] = line.split(':', 1)[1].strip()
         elif lower.startswith('what went well:'):
             parsed['what_went_well'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('risk still existed:'):
+            parsed['risk_still_existed'] = line.split(':', 1)[1].strip()
         elif lower.startswith('what went wrong:'):
             parsed['what_went_wrong'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('behavioral insight:'):
+            parsed['behavioral_insight'] = line.split(':', 1)[1].strip()
         elif lower.startswith('improvement tip:'):
             parsed['improvement_tip'] = line.split(':', 1)[1].strip()
+        elif lower.startswith('repeat or improve:'):
+            parsed['repeat_or_improve'] = line.split(':', 1)[1].strip()
         elif lower.startswith('action plan:'):
             continue
-        elif (raw_line.strip().startswith('- ') or raw_line.strip().startswith('• ')) and parsed['improvement_tip']:
+        elif (raw_line.strip().startswith('- ') or raw_line.strip().startswith('• ')):
             parsed['action_plan'].append(raw_line.strip()[2:].strip())
 
     # Fallback: if format was not strictly followed, still show useful output.
@@ -194,12 +217,28 @@ def _build_rule_based_trade_mistake(trade_inputs):
     pnl_negative = (pnl_abs is not None and pnl_abs < 0) or pnl_pct < 0
 
     mistake_type = 'Good Trade'
-    explanation = 'Your trade shows a reasonable decision process based on the available data.'
-    tip = 'Keep following a plan with clear entry, exit, and risk limits.'
+    explanation = 'This trade closed green, but the quality depends on how strong your entry timing and risk plan were.'
+    tip = 'Keep following a written plan with clear entry, exit, and risk limits.'
+    entry_timing = 'Entry timing could not be fully verified because RSI-at-entry data was unavailable.'
+    market_condition = 'Market condition at entry appears mixed from available signals.'
+    why_result_happened = 'The result came from short-term price movement between your buy and sell levels.'
+    skill_vs_luck_meter = '55/100'
+    trade_quality_insight = 'This outcome shows some execution skill but still includes market luck.'
+    risk_still_existed = 'Risk remained because the trade context was partially uncertain at entry.'
+    repeat_or_improve = 'Repeat the planning discipline and improve by recording your entry trigger before each trade.'
+    behavioral_insight = 'This trade suggests your process can improve by defining risk rules before entry.'
 
     # Priority-based classification from strongest signals to weakest.
     if buy_rsi is not None and buy_rsi >= 70 and pnl_negative:
         mistake_type = 'FOMO Buying'
+        entry_timing = f'Late/risky entry: RSI at entry was {buy_rsi:.1f}, suggesting you bought after a strong run.'
+        market_condition = 'Failed bounce conditions: momentum was stretched, then selling resumed.'
+        why_result_happened = f'Cause: you entered late into strength. Mistake: trend continuation was assumed without confirmation. Consequence: price reversed and loss reached {pnl_pct:.2f}%.'
+        skill_vs_luck_meter = '28/100'
+        trade_quality_insight = 'The outcome was mostly driven by poor timing rather than a high-probability setup.'
+        risk_still_existed = 'Reversal risk was high the moment you entered.'
+        repeat_or_improve = 'Avoid chasing green candles; wait for pullback + confirmation.'
+        behavioral_insight = 'This reflects impulse-entry behavior and low confirmation discipline under momentum pressure.'
         explanation = (
             f'You entered when RSI was high ({buy_rsi:.1f}), which often means the price was already overheated. '
             f'The trade then moved against you ({pnl_pct:.2f}%).'
@@ -209,6 +248,14 @@ def _build_rule_based_trade_mistake(trade_inputs):
         tip = 'Wait for pullbacks or confirmation before buying after sharp moves.'
     elif pnl_negative and minutes is not None and minutes <= 20:
         mistake_type = 'Panic Selling'
+        entry_timing = 'Entry timing may not be the core issue; the main issue was an emotion-driven early exit.'
+        market_condition = 'Likely continued downtrend or failed bounce during a weak tape.'
+        why_result_happened = f'Cause: price stayed weak after entry. Mistake: reactive exit under pressure without plan. Consequence: trade closed in loss after {int(minutes)} minutes ({pnl_pct:.2f}%).'
+        skill_vs_luck_meter = '40/100'
+        trade_quality_insight = 'This looks more like emotional reaction than systematic execution.'
+        risk_still_existed = 'Without predefined invalidation, short-term volatility can force poor exits.'
+        repeat_or_improve = 'Predefine stop-loss and hold only to rule-based invalidation.'
+        behavioral_insight = 'This suggests emotional reactivity and low tolerance for normal pullbacks without a predefined exit rule.'
         explanation = (
             f'You exited quickly after entry ({int(minutes)} minutes) with a loss ({pnl_pct:.2f}%), '
             'which suggests an emotion-driven exit instead of a planned one.'
@@ -218,6 +265,14 @@ def _build_rule_based_trade_mistake(trade_inputs):
         tip = 'Set your stop-loss and target before entering so you do not react emotionally.'
     elif minutes is not None and minutes <= 10 and abs(pnl_pct) <= 1.5:
         mistake_type = 'Overtrading'
+        entry_timing = f'Timing was low-conviction: very short hold ({int(minutes)} min) indicates a rushed setup.'
+        market_condition = 'Likely range-bound/noisy market rather than a clean directional move.'
+        why_result_happened = f'Cause: setup quality was weak in choppy conditions. Mistake: rapid entry/exit without edge. Consequence: outcome stayed near noise at {pnl_pct:.2f}%.'
+        skill_vs_luck_meter = '38/100'
+        trade_quality_insight = 'The trade looked reactive and too short to validate a full setup.'
+        risk_still_existed = 'Frequent short trades increase random outcomes and decision fatigue.'
+        repeat_or_improve = 'Trade less often and only when your setup checklist is fully met.'
+        behavioral_insight = 'This indicates a compulsion to trade activity rather than waiting for high-quality setups.'
         explanation = (
             f'The holding time was very short ({int(minutes)} minutes) with small movement ({pnl_pct:.2f}%). '
             'Frequent quick trades can increase mistakes and fees.'
@@ -227,6 +282,14 @@ def _build_rule_based_trade_mistake(trade_inputs):
         tip = 'Trade less often and only when your setup is clearly valid.'
     elif pnl_pct <= -3:
         mistake_type = 'No Stop Loss'
+        entry_timing = 'Entry was early in a weak market and likely against the active trend.'
+        market_condition = 'Continued downtrend with no confirmed reversal signal.'
+        why_result_happened = f'Cause: selling pressure continued after entry. Mistake: no predefined stop-loss. Consequence: loss expanded to {pnl_pct:.2f}% instead of being capped.'
+        skill_vs_luck_meter = '35/100'
+        trade_quality_insight = 'Execution quality was limited by missing risk boundaries.'
+        risk_still_existed = 'Downside risk remained fully open throughout the trade.'
+        repeat_or_improve = 'Always set stop-loss at entry and cap risk to 1-2% per trade.'
+        behavioral_insight = 'This suggests a tendency to hold losers without predefined exits, which compounds risk quickly.'
         explanation = (
             f'This trade ended with a larger loss ({pnl_pct:.2f}%). '
             'A predefined stop-loss could have limited downside risk.'
@@ -236,6 +299,14 @@ def _build_rule_based_trade_mistake(trade_inputs):
         tip = 'Place a stop-loss at entry and cap risk per trade to 1-2% of capital.'
     elif pnl_negative:
         mistake_type = 'Panic Selling'
+        entry_timing = 'Entry was early in a weak/uncertain market with limited confirmation.'
+        market_condition = 'Likely weak trend or failed bounce where sellers remained in control.'
+        why_result_happened = f'Cause: market failed to recover after entry. Mistake: entry lacked confirmation and risk plan. Consequence: trade closed at {pnl_pct:.2f}% loss.'
+        skill_vs_luck_meter = '45/100'
+        trade_quality_insight = 'This trade was partly process-driven but lacked strong pre-trade structure.'
+        risk_still_existed = 'Ambiguous exit criteria left room for emotional execution.'
+        repeat_or_improve = 'Document invalidation and expected scenario before every entry.'
+        behavioral_insight = 'This suggests planning gaps: the trade thesis and exit rules were not concrete before execution.'
         explanation = (
             f'This trade closed in loss ({pnl_pct:.2f}%). '
             'Without a strong rule-based exit, small losses are often caused by reactive decisions.'
@@ -245,6 +316,34 @@ def _build_rule_based_trade_mistake(trade_inputs):
         tip = 'Before entering, define your invalidation level and exit only if that rule is hit.'
     elif pnl_pct >= 1:
         mistake_type = 'Good Trade'
+        if buy_rsi is None:
+            entry_timing = f'Entry timing appears acceptable: the trade reached profit with a {pnl_pct:.2f}% move.'
+        elif buy_rsi <= 35:
+            entry_timing = f'Strong timing: you entered after weakness (RSI {buy_rsi:.1f}), then captured recovery.'
+        elif buy_rsi >= 65:
+            entry_timing = f'Late-but-worked timing: entry at RSI {buy_rsi:.1f} was riskier and relied on continuation.'
+        else:
+            entry_timing = f'Balanced timing: entry RSI {buy_rsi:.1f} was near neutral, reducing chase risk.'
+
+        if minutes is not None and minutes <= 45:
+            market_condition = 'Short-term recovery/bounce environment favored quick profit-taking.'
+        elif minutes is not None and minutes > 180:
+            market_condition = 'Trend-following environment likely supported a longer hold.'
+        else:
+            market_condition = 'Moderate trend conditions likely supported a controlled move.'
+
+        if buy_rsi is not None and buy_rsi >= 65:
+            why_result_happened = 'Profit likely came from favorable continuation in market momentum, not low-risk timing.'
+            skill_vs_luck_meter = '58/100'
+            trade_quality_insight = 'This winner had execution skill, but continuation luck also helped.'
+        else:
+            why_result_happened = 'Profit came from a reasonably timed entry plus controlled exit discipline.'
+            skill_vs_luck_meter = '72/100'
+            trade_quality_insight = 'This result appears primarily skill-based with moderate market tailwind.'
+
+        risk_still_existed = 'Even profitable trades can fail if trend strength fades suddenly.'
+        repeat_or_improve = 'Repeat your entry discipline and improve by documenting exact setup tags in your journal.'
+        behavioral_insight = 'This trade shows improving discipline, but consistency still depends on repeating the same pre-trade checklist.'
         explanation = (
             f'You closed the trade with a positive result ({pnl_pct:.2f}%). '
             'That indicates decent entry/exit discipline for this setup.'
@@ -270,10 +369,18 @@ def _build_rule_based_trade_mistake(trade_inputs):
     analysis = (
         f"- Mistake Type: {mistake_type}\n"
         f"- Confidence Score: {confidence_score}\n"
+        f"- Entry Timing: {entry_timing}\n"
+        f"- Market Condition at Entry: {market_condition}\n"
+        f"- Why This Result Happened: {why_result_happened}\n"
+        f"- Skill vs Luck Meter: {skill_vs_luck_meter}\n"
+        f"- Trade Quality Insight: {trade_quality_insight}\n"
         f"- Explanation: {explanation}\n"
         f"- What Went Well: {went_well}\n"
+        f"- Risk Still Existed: {risk_still_existed}\n"
         f"- What Went Wrong: {went_wrong}\n"
-        f"- Improvement Tip: {tip}"
+        f"- Behavioral Insight: {behavioral_insight}\n"
+        f"- Improvement Tip: {tip}\n"
+        f"- Repeat or Improve: {repeat_or_improve}"
         "\n- Action Plan:\n"
         f"  - {action_plan[0]}\n"
         f"  - {action_plan[1]}\n"
@@ -285,10 +392,18 @@ def _build_rule_based_trade_mistake(trade_inputs):
         'parsed': {
             'mistake_type': mistake_type,
             'confidence_score': str(confidence_score),
+            'entry_timing': entry_timing,
+            'market_condition_at_entry': market_condition,
+            'why_result_happened': why_result_happened,
+            'skill_vs_luck_meter': skill_vs_luck_meter,
+            'trade_quality_insight': trade_quality_insight,
             'explanation': explanation,
             'what_went_well': went_well,
+            'risk_still_existed': risk_still_existed,
             'what_went_wrong': went_wrong,
+            'behavioral_insight': behavioral_insight,
             'improvement_tip': tip,
+            'repeat_or_improve': repeat_or_improve,
             'action_plan': action_plan,
         }
     }
@@ -569,6 +684,38 @@ def trade_mistake_analyzer():
             parsed = fallback['parsed']
         else:
             parsed = _parse_trade_mistake_response(analysis_text)
+
+        # Fill missing advanced fields with deterministic trade-context hints.
+        context_defaults = _build_rule_based_trade_mistake(trade_inputs).get('parsed', {})
+        for key in [
+            'entry_timing',
+            'market_condition_at_entry',
+            'why_result_happened',
+            'skill_vs_luck_meter',
+            'trade_quality_insight',
+            'risk_still_existed',
+            'repeat_or_improve',
+            'behavioral_insight'
+        ]:
+            if not parsed.get(key):
+                parsed[key] = context_defaults.get(key, '')
+
+        # Enforce non-generic losing-trade explanation quality.
+        pnl_value = _extract_numeric(trade_inputs.get('profit_loss'))
+        is_losing_trade = pnl_value is not None and pnl_value < 0
+        generic_markers = [
+            'market moved against',
+            'moved against you',
+            'adverse market movement',
+            'unfavorable market movement'
+        ]
+        explanation_text = (parsed.get('explanation') or '').lower()
+        if is_losing_trade and (not explanation_text or any(marker in explanation_text for marker in generic_markers)):
+            parsed['explanation'] = context_defaults.get('explanation') or parsed.get('explanation', '')
+            parsed['why_result_happened'] = context_defaults.get('why_result_happened') or parsed.get('why_result_happened', '')
+            parsed['market_condition_at_entry'] = context_defaults.get('market_condition_at_entry') or parsed.get('market_condition_at_entry', '')
+            parsed['entry_timing'] = context_defaults.get('entry_timing') or parsed.get('entry_timing', '')
+            parsed['behavioral_insight'] = context_defaults.get('behavioral_insight') or parsed.get('behavioral_insight', '')
 
         metrics = _compute_trade_quality_metrics(trade_inputs)
 

@@ -1045,3 +1045,382 @@ textarea.form-control:focus {
         justify-content: flex-start;
     }
 }
+
+/* Lovable-style portfolio layout */
+.portfolio-page {
+    max-width: 1320px;
+}
+
+.portfolio-page .navbar {
+    margin-bottom: 0.75rem;
+    min-height: 46px;
+    padding: 0.16rem 0.58rem;
+}
+
+.portfolio-page .auth-title {
+    font-family: var(--pixel-font);
+    font-size: 1.22rem !important;
+    letter-spacing: 0.05em;
+    color: var(--neon-green) !important;
+    text-shadow: 0 0 12px rgba(0, 245, 160, 0.22);
+}
+
+.portfolio-page > .dashboard-card,
+.portfolio-page > .chart-container,
+.portfolio-page > .modal {
+    margin-bottom: 0.72rem;
+}
+
+.portfolio-page .dashboard-card {
+    background: #111928 !important;
+    border: 2px solid #243049 !important;
+    border-radius: 0 !important;
+    box-shadow: 2px 2px 0 #070b13 !important;
+    padding: 0.66rem !important;
+}
+
+.portfolio-page .dashboard-card h3 {
+    font-family: var(--pixel-font);
+    font-size: 0.66rem !important;
+    letter-spacing: 0.08em;
+    color: #d4fff8 !important;
+    margin-bottom: 0.55rem;
+}
+
+.portfolio-page .portfolio-analytics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.72rem;
+    align-items: start;
+}
+
+.portfolio-page .portfolio-summary-grid {
+    margin-top: 0.05rem;
+}
+
+.portfolio-page .summary-stat {
+    background: #0f1727 !important;
+    border: 2px solid #243049 !important;
+    border-radius: 0 !important;
+    box-shadow: 2px 2px 0 #070b13 !important;
+    min-height: 140px;
+    padding: 1rem 1rem 0.8rem 1rem !important;
+}
+
+.portfolio-page .summary-stat-cyan {
+    border-left: 3px solid var(--neon-cyan) !important;
+}
+
+.portfolio-page .summary-stat-magenta {
+    border-left: 3px solid var(--neon-magenta) !important;
+}
+
+.portfolio-page .summary-stat-green {
+    border-left: 3px solid var(--neon-green) !important;
+}
+
+.portfolio-page .stat-label {
+    font-family: var(--pixel-font);
+    font-size: 0.42rem !important;
+    letter-spacing: 0.09em;
+    color: #7f91b2 !important;
+    margin-bottom: 0.6rem;
+}
+
+.portfolio-page .stat-value {
+    font-family: var(--pixel-font);
+    font-size: 1.5rem !important;
+    line-height: 1.15;
+}
+
+.portfolio-page .summary-stat small {
+    color: #7f91b2 !important;
+    font-size: 0.7rem;
+}
+
+.portfolio-page .form-control,
+.portfolio-page .form-select {
+    background: #0f1625 !important;
+    color: #d4fff8 !important;
+    border: 2px solid #2a3652 !important;
+    border-radius: 0 !important;
+    min-height: 42px;
+    box-shadow: none !important;
+}
+
+.portfolio-page .form-control:focus,
+.portfolio-page .form-select:focus {
+    border-color: var(--neon-green) !important;
+    box-shadow: 0 0 0 2px rgba(0, 245, 160, 0.18) !important;
+}
+
+.portfolio-page .portfolio-tabs {
+    border-bottom: 2px solid #243049;
+    gap: 0.35rem;
+}
+
+.portfolio-page .portfolio-tabs .nav-link {
+    border: 2px solid transparent !important;
+    border-bottom: 0 !important;
+    border-radius: 0 !important;
+    color: #7f91b2 !important;
+    background: transparent !important;
+    font-family: var(--pixel-font);
+    font-size: 0.48rem;
+    letter-spacing: 0.08em;
+    padding: 0.52rem 0.72rem !important;
+}
+
+.portfolio-page .portfolio-tabs .nav-link.active,
+.portfolio-page .portfolio-tabs .nav-link:hover,
+.portfolio-page .portfolio-tabs .nav-link:focus {
+    color: #0f1523 !important;
+    background: var(--neon-green) !important;
+    border-color: var(--neon-green) !important;
+    box-shadow: none !important;
+}
+
+.portfolio-page .table-wrapper {
+    background: #111928 !important;
+    border: 2px solid #243049 !important;
+    border-radius: 0 !important;
+}
+
+.portfolio-page #history .table-wrapper,
+.portfolio-page #details .table-wrapper,
+.portfolio-page .portfolio-archived-card .table-wrapper {
+    max-height: 280px;
+    overflow: auto;
+}
+
+.portfolio-page .portfolio-risk-card .table-wrapper {
+    max-height: none;
+    overflow: visible;
+}
+
+.portfolio-page .table,
+.portfolio-page .table > :not(caption) > * > * {
+    background: transparent !important;
+    color: #d4fff8 !important;
+}
+
+.portfolio-page .table thead th {
+    background: #1a2336 !important;
+    color: #7f91b2 !important;
+    border-bottom: 2px solid #243049 !important;
+    font-family: var(--pixel-font);
+    font-size: 0.38rem !important;
+    letter-spacing: 0.08em;
+    padding: 0.5rem 0.72rem !important;
+}
+
+.portfolio-page .table tbody tr {
+    border-bottom: 1px solid rgba(36, 48, 73, 0.95);
+}
+
+.portfolio-page .table tbody td {
+    font-size: 0.74rem;
+    padding: 0.58rem 0.72rem !important;
+    color: #d4fff8 !important;
+}
+
+.portfolio-page .table tbody tr:hover,
+.portfolio-page .table-hover > tbody > tr:hover > * {
+    background: rgba(24, 34, 58, 0.82) !important;
+}
+
+.portfolio-page .portfolio-chart-shell {
+    background: #111928 !important;
+    border: 2px solid #243049 !important;
+    border-radius: 0 !important;
+    min-height: 380px;
+    padding: 0.85rem !important;
+}
+
+.portfolio-page #correlationChartContainer {
+    background: #0f1727;
+    border: 1px solid #243049;
+}
+
+.portfolio-page .portfolio-correlation-card .chart-container {
+    min-height: 280px;
+}
+
+.portfolio-page .portfolio-correlation-help {
+    margin: 0 0 0.55rem;
+    color: #7f91b2;
+    font-size: 0.68rem;
+    line-height: 1.35;
+}
+
+.portfolio-page .portfolio-risk-card .table thead th {
+    font-size: 0.34rem !important;
+    padding: 0.42rem 0.58rem !important;
+}
+
+.portfolio-page .portfolio-risk-card .table tbody td {
+    padding: 0.46rem 0.58rem !important;
+    font-size: 0.7rem;
+}
+
+.portfolio-page .portfolio-risk-card .table tbody td:nth-child(3) {
+    color: var(--neon-yellow) !important;
+    font-weight: 700;
+}
+
+.portfolio-page .portfolio-risk-card .table tbody td:nth-child(4) {
+    color: var(--danger) !important;
+    font-weight: 700;
+}
+
+.portfolio-page .portfolio-inline-note {
+    height: 100%;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #7f91b2;
+    font-size: 0.76rem;
+    padding: 0.75rem;
+    border: 1px dashed #2a3652;
+    background: #0f1727;
+}
+
+.portfolio-page .portfolio-inline-table .table {
+    margin-bottom: 0;
+}
+
+.portfolio-page .portfolio-sold-total-bar {
+    padding: 0.8rem 0.9rem;
+    background: #0f1727;
+    border: 2px solid #243049;
+    border-radius: 0;
+    margin-top: 0.9rem;
+}
+
+.portfolio-page #tradeMistakeModal .modal-content {
+    background: #0d1524 !important;
+    border: 2px solid #2b3b5a !important;
+}
+
+.portfolio-page #tradeMistakeModal .modal-header,
+.portfolio-page #tradeMistakeModal .modal-footer {
+    border-color: #253451;
+}
+
+.portfolio-page #tradeMistakeModal .modal-title,
+.portfolio-page #tradeMistakeModal .fw-semibold,
+.portfolio-page #tradeMistakeModal strong,
+.portfolio-page #tradeMistakeModal .modal-body {
+    color: #d9e7ff !important;
+}
+
+.portfolio-page #tradeMistakeModal .tm-review-label {
+    color: #8ea5c9 !important;
+}
+
+.portfolio-page #tradeMistakeModal .tm-meta-strip {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.45rem;
+}
+
+.portfolio-page #tradeMistakeModal .tm-meta-item {
+    background: #15233b;
+    border: 1px solid #2b3b5a;
+    padding: 0.45rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.portfolio-page #tradeMistakeModal .tm-meta-item small {
+    color: #8ea5c9;
+    font-size: 0.64rem;
+    line-height: 1;
+}
+
+.portfolio-page #tradeMistakeModal .tm-meta-item strong {
+    color: #d9e7ff;
+    font-size: 0.86rem;
+    line-height: 1.1;
+}
+
+.portfolio-page #tradeMistakeModal .tm-report {
+    border: 1px solid #2b3b5a;
+    background: #101b30;
+}
+
+.portfolio-page #tradeMistakeModal .tm-report-item {
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid #21314d;
+}
+
+.portfolio-page #tradeMistakeModal .tm-report-item:last-child {
+    border-bottom: 0;
+}
+
+.portfolio-page #tradeMistakeModal .tm-field-title {
+    color: #9ab1d3;
+    font-size: 0.72rem;
+    margin-bottom: 0.22rem;
+    font-family: var(--pixel-font);
+}
+
+.portfolio-page #tradeMistakeModal .tm-field-text {
+    color: #d9e7ff;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.portfolio-page #tradeMistakeModal .tm-plain-list {
+    margin: 0;
+    padding-left: 1rem;
+}
+
+.portfolio-page #tradeMistakeModal .tm-plan-item {
+    color: #d9e7ff;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    margin: 0.16rem 0;
+}
+
+.portfolio-page #tradeMistakeModal #tm-quality-chart,
+.portfolio-page #tradeMistakeModal #tm-market-chart {
+    background: #111c2f;
+    border: 1px solid #253451;
+    padding: 0.3rem;
+}
+
+@media (max-width: 900px) {
+    .portfolio-page #tradeMistakeModal .tm-meta-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991px) {
+    .portfolio-page .summary-stat {
+        min-height: 124px;
+    }
+
+    .portfolio-page .portfolio-analytics-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .portfolio-page > .dashboard-card,
+    .portfolio-page > .chart-container {
+        margin-bottom: 0.62rem;
+    }
+
+    .portfolio-page .portfolio-tabs {
+        gap: 0.2rem;
+    }
+
+    .portfolio-page .portfolio-tabs .nav-link {
+        font-size: 0.44rem;
+        padding: 0.48rem 0.5rem !important;
+    }
+}

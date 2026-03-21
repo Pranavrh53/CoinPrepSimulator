@@ -869,18 +869,51 @@ Task:
    - Overtrading
    - No Stop Loss
    - Good Trade (if no mistake)
-2. Explain WHY this behavior is a mistake or good decision.
+2. Make the analysis specific to THIS trade.
 3. Keep explanation beginner-friendly.
 4. Be constructive, not harsh.
 5. Give practical corrections the user can apply in the next trade.
 
+Specificity requirements (mandatory):
+- Always reference:
+    - Entry timing (good / late / risky)
+    - Market condition at entry (trend / recovery / drop / chop)
+    - Why this trade ended in profit or loss
+- For Good Trade:
+    - Explicitly separate skill vs favorable market movement vs luck
+- Avoid generic phrases like:
+    - "reasonable decision"
+    - "good process"
+- Use concrete language like:
+    - "You entered after a drop near support"
+    - "You captured a short-term bounce"
+    - "Profit came from temporary recovery, not trend strength"
+- Always include:
+    1. What worked (specific)
+    2. What risk still existed
+    3. What to repeat or improve
+- For losing trades, be explicit and decisive:
+    - Do not use vague phrases like "market moved against you"
+    - Infer the likely scenario: continued downtrend, breakdown below support, or failed bounce
+    - Be direct about entry quality: early in weak market, against trend, or low confirmation
+    - Include behavioral diagnosis: poor risk management, holding losses too long, or lack of planning
+    - Write explanation as cause -> mistake -> consequence
+
 Output format:
 - Mistake Type:
 - Confidence Score: (0-100)
+- Entry Timing:
+- Market Condition at Entry:
+- Why This Result Happened:
+- Skill vs Luck Meter: (0-100 where higher = more skill-driven)
+- Trade Quality Insight:
 - Explanation:
 - What Went Well:
+- Risk Still Existed:
 - What Went Wrong:
+- Behavioral Insight:
 - Improvement Tip:
+- Repeat or Improve:
 - Action Plan:
     - <step 1>
     - <step 2>

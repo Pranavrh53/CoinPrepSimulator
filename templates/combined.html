@@ -2864,7 +2864,7 @@
         </div>
         
     {% elif section == 'portfolio' %}
-        <div class="container">
+        <div class="container portfolio-page">
             <nav class="navbar navbar-expand-lg">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
                 <div class="navbar-nav ms-auto">
@@ -2884,11 +2884,11 @@
             </div>
             
             <!-- Portfolio Summary -->
-            <div class="dashboard-card">
+            <div class="dashboard-card portfolio-summary-card">
                 <h3><i class="fas fa-chart-pie"></i> PORTFOLIO OVERVIEW</h3>
-                <div class="row">
+                <div class="row portfolio-summary-grid">
                     <div class="col-md-4">
-                        <div class="stat-card">
+                        <div class="stat-card summary-stat summary-stat-cyan">
                             <div class="stat-label">Total Realized Profit/Loss</div>
                             <div class="stat-value {% if total_profit >= 0 %}price-positive{% else %}price-negative{% endif %}">
                                 {% if total_profit >= 0 %}+{% endif %}${{ total_profit | round(2) }}
@@ -2897,7 +2897,7 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="stat-card">
+                        <div class="stat-card summary-stat summary-stat-magenta">
                             <div class="stat-label">Total Unrealized Profit/Loss</div>
                             <div class="stat-value {% if total_unrealized_profit >= 0 %}price-positive{% else %}price-negative{% endif %}">
                                 {% if total_unrealized_profit >= 0 %}+{% endif %}${{ total_unrealized_profit | round(2) }}
@@ -2906,7 +2906,7 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="stat-card">
+                        <div class="stat-card summary-stat summary-stat-green">
                             <div class="stat-label">Total Trading Fees Paid</div>
                             <div class="stat-value" style="color: #ef4444;">-${{ total_fees_paid | round(2) }}</div>
                             <small class="text-muted">0.1% fee per trade</small>
@@ -2915,7 +2915,7 @@
                 </div>
             </div>
             
-            <div class="dashboard-card">
+            <div class="dashboard-card portfolio-add-card">
                 <h3><i class="fas fa-plus-circle"></i> ADD HOLDING</h3>
                 <form method="POST" action="{{ url_for('portfolio') }}">
                     <div class="row g-3">
@@ -2948,8 +2948,8 @@
             </div>
             
             <!-- Tabbed Portfolio Sections -->
-            <div class="dashboard-card">
-                <ul class="nav nav-tabs mb-3" id="portfolioTabs" role="tablist">
+            <div class="dashboard-card portfolio-tabs-card">
+                <ul class="nav nav-tabs mb-3 portfolio-tabs" id="portfolioTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="holdings-tab" data-bs-toggle="tab" data-bs-target="#holdings" type="button">
                             <i class="fas fa-coins"></i> HOLDINGS
@@ -3158,7 +3158,7 @@
                 </div>
             </div>
             
-            <div class="chart-container" id="portfolioChartContainer" style="opacity: 0; transition: opacity 0.3s;">
+            <div class="chart-container portfolio-chart-shell" id="portfolioChartContainer" style="display: none; opacity: 0; transition: opacity 0.3s;">
                 <canvas id="portfolioChart"></canvas>
             </div>
             
@@ -3168,6 +3168,7 @@
                     
                     window.showPortfolioChart = function(coinId) {
                         const chartContainer = document.getElementById('portfolioChartContainer');
+                        chartContainer.style.display = 'block';
                         chartContainer.style.opacity = '0.5';
                         
                         fetch(`/historical/${coinId}`)
@@ -3360,59 +3361,114 @@
                 })();
             </script>
             
-            <div class="dashboard-card">
-                <h3><i class="fas fa-shield-alt"></i>Risk Metrics</h3>
-                <div class="table-wrapper">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Coin</th>
-                                <th>Sharpe Ratio</th>
-                                <th>Volatility (Annualized)</th>
-                                <th>Max Drawdown</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if risk_metrics %}
-                                {% for coin_id, metrics in risk_metrics.items() %}
-                                    <tr>
-                                        <td><strong>{{ coin_id.upper() }}</strong></td>
-                                        <td>{{ metrics.sharpe_ratio }}</td>
-                                        <td>{{ metrics.volatility }}</td>
-                                        <td class="price-negative">{{ metrics.max_drawdown }}</td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
+            <div class="portfolio-analytics-grid">
+                <div class="dashboard-card portfolio-risk-card">
+                    <h3><i class="fas fa-shield-alt"></i> RISK METRICS</h3>
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
                                 <tr>
-                                    <td colspan="4" class="text-center">
-                                        <div class="empty-state">
-                                            <i class="fas fa-chart-bar"></i>
-                                            <h4>No Risk Metrics</h4>
-                                            <p>Add holdings to view risk analysis</p>
-                                        </div>
-                                    </td>
+                                    <th>Coin</th>
+                                    <th>Sharpe Ratio</th>
+                                    <th>Volatility (Annualized)</th>
+                                    <th>Max Drawdown</th>
                                 </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {% if risk_metrics %}
+                                    {% for coin_id, metrics in risk_metrics.items() %}
+                                        <tr>
+                                            <td><strong>{{ coin_id.upper() }}</strong></td>
+                                            <td>{{ metrics.sharpe_ratio }}</td>
+                                            <td>{{ metrics.volatility }}</td>
+                                            <td class="price-negative">{{ metrics.max_drawdown }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center">
+                                            <div class="empty-state">
+                                                <i class="fas fa-chart-bar"></i>
+                                                <h4>No Risk Metrics</h4>
+                                                <p>Add holdings to view risk analysis</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="dashboard-card">
-                <h3><i class="fas fa-project-diagram"></i>Asset Correlation Matrix</h3>
-                <div class="chart-container" id="correlationChartContainer" style="height: 400px;">
-                    <canvas id="correlationChart"></canvas>
-                </div>
-                <script>
-                    fetch('/correlation_matrix')
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.matrix && data.matrix.length > 0) {
-                                if (!Chart.registry.getController('matrix')) {
+                
+                <div class="dashboard-card portfolio-correlation-card">
+                    <h3><i class="fas fa-project-diagram"></i> ASSET CORRELATION MATRIX</h3>
+                    <p class="portfolio-correlation-help">Use this to see how coins move together. Values near +1 move together, near -1 move opposite, near 0 are weakly related.</p>
+                    <div class="chart-container" id="correlationChartContainer" style="height: 290px;">
+                        <canvas id="correlationChart"></canvas>
+                    </div>
+                    <script>
+                        function renderCorrelationFallbackTable(data) {
+                            const container = document.getElementById('correlationChartContainer');
+                            if (!container) return;
+
+                            const labels = data.labels || [];
+                            const matrix = data.matrix || [];
+
+                            if (!labels.length || !matrix.length) {
+                                container.innerHTML = '<div class="portfolio-inline-note">Correlation matrix is empty. You need at least 2 different coins with enough price history.</div>';
+                                return;
+                            }
+
+                            let tableHtml = '<div class="table-wrapper portfolio-inline-table"><table class="table"><thead><tr><th>COIN</th>';
+                            labels.forEach(label => {
+                                tableHtml += `<th>${String(label).toUpperCase()}</th>`;
+                            });
+                            tableHtml += '</tr></thead><tbody>';
+
+                            matrix.forEach((row, i) => {
+                                tableHtml += `<tr><td><strong>${String(labels[i] || '').toUpperCase()}</strong></td>`;
+                                row.forEach(val => {
+                                    const num = Number(val);
+                                    const cls = num >= 0 ? 'price-positive' : 'price-negative';
+                                    tableHtml += `<td class="${cls}">${num.toFixed(2)}</td>`;
+                                });
+                                tableHtml += '</tr>';
+                            });
+
+                            tableHtml += '</tbody></table></div>';
+                            container.innerHTML = tableHtml;
+                        }
+
+                        fetch('/correlation_matrix')
+                            .then(async (response) => {
+                                const raw = await response.text();
+                                let data;
+                                try {
+                                    data = JSON.parse(raw);
+                                } catch (e) {
+                                    throw new Error('Invalid server response for correlation data.');
+                                }
+
+                                if (!response.ok) {
+                                    throw new Error(data.error || 'Failed to load correlation data.');
+                                }
+
+                                return data;
+                            })
+                            .then(data => {
+                                const labels = data.labels || [];
+                                const matrix = data.matrix || [];
+
+                                if (!matrix.length || !labels.length) {
                                     const container = document.getElementById('correlationChartContainer');
                                     if (container) {
-                                        container.innerHTML = '<div class="text-muted p-3">Correlation heatmap unavailable: Chart.js matrix controller is not loaded.</div>';
+                                        container.innerHTML = '<div class="portfolio-inline-note">No correlation data yet. Add at least 2 different coins in holdings and wait for more price history.</div>';
                                     }
+                                    return;
+                                }
+
+                                if (!Chart.registry.getController('matrix')) {
+                                    renderCorrelationFallbackTable(data);
                                     return;
                                 }
 
@@ -3422,7 +3478,7 @@
                                     data: {
                                         datasets: [{
                                             label: 'Correlation Matrix',
-                                            data: data.matrix.flatMap((row, i) => 
+                                            data: matrix.flatMap((row, i) => 
                                                 row.map((value, j) => ({
                                                     x: j,
                                                     y: i,
@@ -3434,14 +3490,13 @@
                                                 const intensity = Math.abs(value);
                                                 if (value >= 0) {
                                                     return `rgba(37, 99, 235, ${intensity})`;
-                                                } else {
-                                                    return `rgba(239, 68, 68, ${intensity})`;
                                                 }
+                                                return `rgba(239, 68, 68, ${intensity})`;
                                             },
                                             borderColor: 'rgba(0, 0, 0, 0.1)',
                                             borderWidth: 1,
-                                            width: ({ chart }) => (chart.chartArea.width / data.labels.length) - 2,
-                                            height: ({ chart }) => (chart.chartArea.height / data.labels.length) - 2
+                                            width: ({ chart }) => (chart.chartArea.width / labels.length) - 2,
+                                            height: ({ chart }) => (chart.chartArea.height / labels.length) - 2
                                         }]
                                     },
                                     options: {
@@ -3463,8 +3518,8 @@
                                                 callbacks: {
                                                     title: () => 'Correlation',
                                                     label: (ctx) => {
-                                                        const xLabel = data.labels[ctx.raw.x];
-                                                        const yLabel = data.labels[ctx.raw.y];
+                                                        const xLabel = labels[ctx.raw.x];
+                                                        const yLabel = labels[ctx.raw.y];
                                                         const value = ctx.raw.v;
                                                         return `${xLabel} vs ${yLabel}: ${value}`;
                                                     }
@@ -3474,7 +3529,7 @@
                                         scales: {
                                             x: {
                                                 ticks: {
-                                                    callback: (value) => data.labels[value]?.toUpperCase() || '',
+                                                    callback: (value) => labels[value]?.toUpperCase() || '',
                                                     maxRotation: 45,
                                                     minRotation: 45,
                                                     color: '#64748b',
@@ -3486,8 +3541,8 @@
                                                 grid: { display: false }
                                             },
                                             y: {
-                                                ticks: { 
-                                                    callback: (value) => data.labels[value]?.toUpperCase() || '',
+                                                ticks: {
+                                                    callback: (value) => labels[value]?.toUpperCase() || '',
                                                     color: '#64748b',
                                                     font: {
                                                         size: 11,
@@ -3499,16 +3554,20 @@
                                         }
                                     }
                                 });
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error loading correlation matrix:', error);
-                        });
-                </script>
+                            })
+                            .catch(error => {
+                                const container = document.getElementById('correlationChartContainer');
+                                if (container) {
+                                    container.innerHTML = `<div class="portfolio-inline-note">${error.message || 'Could not load correlation data right now. Please refresh.'}</div>`;
+                                }
+                                console.error('Error loading correlation matrix:', error);
+                            });
+                    </script>
+                </div>
             </div>
             
-            <div class="dashboard-card">
-                <h3><i class="fas fa-history"></i>Archived Transactions (Sold Coins)</h3>
+            <div class="dashboard-card portfolio-archived-card">
+                <h3><i class="fas fa-history"></i> ARCHIVED TRANSACTIONS (SOLD COINS)</h3>
                 <div class="table-wrapper">
                     <table class="table">
                         <thead>
@@ -3565,7 +3624,7 @@
                     </table>
                 </div>
                 {% if total_profit is defined and sold_transactions %}
-                    <div style="padding: 16px; background: var(--bg-secondary); border-radius: 8px; margin-top: 16px;">
+                    <div class="portfolio-sold-total-bar">
                         <strong style="font-size: 16px;">Total Profit/Loss from Sold Coins:</strong> 
                         <span style="font-size: 18px; font-weight: 700;" class="{% if total_profit|float > 0 %}price-positive{% else %}price-negative{% endif %}">
                             ${{ total_profit }}
@@ -3590,36 +3649,71 @@
                             <div id="trade-mistake-error" class="alert alert-danger" style="display:none;"></div>
 
                             <div id="trade-mistake-results" style="display:none;">
-                                <div class="row g-3 mb-3">
-                                    <div class="col-md-3">
-                                        <div class="p-2 rounded border bg-light">
-                                            <small class="text-muted d-block">Coin</small>
-                                            <strong id="tm-coin">-</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="p-2 rounded border bg-light">
-                                            <small class="text-muted d-block">Buy Price</small>
-                                            <strong id="tm-buy-price">-</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="p-2 rounded border bg-light">
-                                            <small class="text-muted d-block">Sell Price</small>
-                                            <strong id="tm-sell-price">-</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="p-2 rounded border bg-light">
-                                            <small class="text-muted d-block">P/L</small>
-                                            <strong id="tm-profit-loss">-</strong>
-                                        </div>
-                                    </div>
+                                <div class="tm-meta-strip mb-3">
+                                    <span class="tm-meta-item"><small>Coin</small><strong id="tm-coin">-</strong></span>
+                                    <span class="tm-meta-item"><small>Buy</small><strong id="tm-buy-price">-</strong></span>
+                                    <span class="tm-meta-item"><small>Sell</small><strong id="tm-sell-price">-</strong></span>
+                                    <span class="tm-meta-item"><small>P/L</small><strong id="tm-profit-loss">-</strong></span>
+                                    <span class="tm-meta-item"><small>Confidence</small><strong id="tm-confidence-score">-</strong></span>
                                 </div>
 
-                                <div class="p-2 rounded border bg-light mb-3">
-                                    <small class="text-muted d-block">Confidence Score</small>
-                                    <strong id="tm-confidence-score">-</strong>
+                                <div class="tm-report mb-3">
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Mistake Type:</div>
+                                        <div id="tm-mistake-type" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Explanation:</div>
+                                        <div id="tm-explanation" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Entry Timing:</div>
+                                        <div id="tm-entry-timing" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Market Condition at Entry:</div>
+                                        <div id="tm-market-condition" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Why This Result Happened:</div>
+                                        <div id="tm-result-driver" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Skill vs Luck Meter:</div>
+                                        <div id="tm-skill-vs-luck" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Trade Quality Insight:</div>
+                                        <div id="tm-quality-insight" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">What Went Well:</div>
+                                        <ul id="tm-went-well" class="tm-plain-list"></ul>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">What Went Wrong:</div>
+                                        <ul id="tm-went-wrong" class="tm-plain-list"></ul>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Behavioral Insight:</div>
+                                        <div id="tm-behavioral-insight" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Risk Still Existed:</div>
+                                        <div id="tm-risk-still" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Repeat or Improve:</div>
+                                        <div id="tm-repeat-improve" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Improvement Tip:</div>
+                                        <div id="tm-tip" class="tm-field-text">-</div>
+                                    </div>
+                                    <div class="tm-report-item">
+                                        <div class="tm-field-title">Action Plan:</div>
+                                        <ul id="tm-action-plan" class="tm-plain-list"></ul>
+                                    </div>
                                 </div>
 
                                 <div class="mb-3">
@@ -3632,34 +3726,7 @@
                                     <canvas id="tm-market-chart" height="130"></canvas>
                                 </div>
 
-                                <div class="mb-3">
-                                    <div class="fw-semibold mb-1">Mistake Type</div>
-                                    <div id="tm-mistake-type" class="p-2 rounded border bg-light">-</div>
-                                </div>
-                                <div class="mb-3">
-                                    <div class="fw-semibold mb-1">Explanation</div>
-                                    <div id="tm-explanation" class="p-2 rounded border bg-light">-</div>
-                                </div>
-                                <div class="mb-2">
-                                    <div class="fw-semibold mb-1">Improvement Tip</div>
-                                    <div id="tm-tip" class="p-2 rounded border bg-light">-</div>
-                                </div>
-
-                                <div class="mb-2">
-                                    <div class="fw-semibold mb-1">What Went Well</div>
-                                    <div id="tm-went-well" class="p-2 rounded border bg-light">-</div>
-                                </div>
-
-                                <div class="mb-2">
-                                    <div class="fw-semibold mb-1">What Went Wrong</div>
-                                    <div id="tm-went-wrong" class="p-2 rounded border bg-light">-</div>
-                                </div>
-
-                                <div class="mb-2">
-                                    <div class="fw-semibold mb-1">Action Plan</div>
-                                    <ul id="tm-action-plan" class="list-group"></ul>
-                                </div>
-                                <small id="tm-response-time" class="text-muted"></small>
+                                <small id="tm-response-time" class="tm-review-label"></small>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -3716,12 +3783,46 @@
                     const pnlEl = document.getElementById('tm-profit-loss');
                     const typeEl = document.getElementById('tm-mistake-type');
                     const confidenceEl = document.getElementById('tm-confidence-score');
+                    const entryTimingEl = document.getElementById('tm-entry-timing');
+                    const marketConditionEl = document.getElementById('tm-market-condition');
+                    const resultDriverEl = document.getElementById('tm-result-driver');
+                    const skillVsLuckEl = document.getElementById('tm-skill-vs-luck');
+                    const qualityInsightEl = document.getElementById('tm-quality-insight');
                     const explanationEl = document.getElementById('tm-explanation');
                     const tipEl = document.getElementById('tm-tip');
                     const wellEl = document.getElementById('tm-went-well');
                     const wrongEl = document.getElementById('tm-went-wrong');
+                    const behavioralInsightEl = document.getElementById('tm-behavioral-insight');
+                    const riskStillEl = document.getElementById('tm-risk-still');
+                    const repeatImproveEl = document.getElementById('tm-repeat-improve');
                     const actionPlanEl = document.getElementById('tm-action-plan');
                     const responseEl = document.getElementById('tm-response-time');
+
+                    const toBulletArray = (value, fallback = []) => {
+                        if (Array.isArray(value) && value.length) return value;
+                        if (typeof value === 'string' && value.trim()) {
+                            const parts = value
+                                .split('\n')
+                                .map(part => part.trim())
+                                .filter(Boolean)
+                                .map(part => part.replace(/^[-•*]\s*/, '').trim())
+                                .filter(Boolean);
+                            if (parts.length) return parts;
+                        }
+                        return fallback;
+                    };
+
+                    const renderBulletList = (el, values, fallbackValues) => {
+                        if (!el) return;
+                        el.innerHTML = '';
+                        const items = toBulletArray(values, fallbackValues);
+                        items.slice(0, 4).forEach(step => {
+                            const li = document.createElement('li');
+                            li.className = 'tm-plan-item';
+                            li.textContent = step;
+                            el.appendChild(li);
+                        });
+                    };
 
                     if (coinEl) coinEl.textContent = details.coin || '-';
                     if (buyEl) buyEl.textContent = details.buy_price !== undefined ? `$${Number(details.buy_price).toFixed(2)}` : '-';
@@ -3730,27 +3831,36 @@
 
                     if (typeEl) typeEl.textContent = parsed.mistake_type || 'Not specified';
                     if (confidenceEl) confidenceEl.textContent = parsed.confidence_score || `${payload.metrics?.overall || 60}/100`;
+                    if (entryTimingEl) entryTimingEl.textContent = parsed.entry_timing || 'Entry timing detail unavailable.';
+                    if (marketConditionEl) marketConditionEl.textContent = parsed.market_condition_at_entry || 'Market context at entry unavailable.';
+                    if (resultDriverEl) resultDriverEl.textContent = parsed.why_result_happened || 'Outcome driver not specified.';
+                    if (skillVsLuckEl) skillVsLuckEl.textContent = parsed.skill_vs_luck_meter || '55/100';
+                    if (qualityInsightEl) qualityInsightEl.textContent = parsed.trade_quality_insight || 'This outcome includes both execution quality and market movement effects.';
                     if (explanationEl) explanationEl.textContent = parsed.explanation || payload.analysis || 'No explanation available.';
                     if (tipEl) tipEl.textContent = parsed.improvement_tip || 'Review your entry and exit rules before the next trade.';
-                    if (wellEl) wellEl.textContent = parsed.what_went_well || 'You completed the trade and reviewed it, which is a strong habit.';
-                    if (wrongEl) wrongEl.textContent = parsed.what_went_wrong || 'Entry/exit criteria were not explicit enough before placing the trade.';
+                    if (behavioralInsightEl) behavioralInsightEl.textContent = parsed.behavioral_insight || 'This trade suggests your process lacked predefined risk and exit rules.';
+                    if (riskStillEl) riskStillEl.textContent = parsed.risk_still_existed || 'Even valid setups can fail without strict risk limits.';
+                    if (repeatImproveEl) repeatImproveEl.textContent = parsed.repeat_or_improve || 'Repeat what worked, and document your trigger before your next entry.';
 
-                    if (actionPlanEl) {
-                        actionPlanEl.innerHTML = '';
-                        const plan = (parsed.action_plan && parsed.action_plan.length)
-                            ? parsed.action_plan
-                            : [
-                                'Write entry, stop-loss, and take-profit before placing the next order.',
-                                'Risk only 1-2% of account value per trade.',
-                                'Review execution quality 24 hours after closing the trade.'
-                            ];
-                        plan.slice(0, 4).forEach(step => {
-                            const li = document.createElement('li');
-                            li.className = 'list-group-item';
-                            li.textContent = step;
-                            actionPlanEl.appendChild(li);
-                        });
-                    }
+                    renderBulletList(
+                        wellEl,
+                        parsed.what_went_well,
+                        ['You completed and reviewed the trade, which is a strong learning habit.']
+                    );
+                    renderBulletList(
+                        wrongEl,
+                        parsed.what_went_wrong,
+                        ['Entry/exit criteria were not explicit enough before placing the trade.']
+                    );
+                    renderBulletList(
+                        actionPlanEl,
+                        parsed.action_plan,
+                        [
+                            'Write entry, stop-loss, and take-profit before placing the next order.',
+                            'Risk only 1-2% of account value per trade.',
+                            'Review execution quality 24 hours after closing the trade.'
+                        ]
+                    );
 
                     renderTradeQualityChart(payload.metrics || {});
                     renderPhase2MarketChart(details);

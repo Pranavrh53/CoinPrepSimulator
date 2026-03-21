@@ -1839,6 +1839,9 @@ def historical(coin_id):
 
 @app.route('/correlation_matrix')
 def correlation_matrix():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Unauthorized', 'labels': [], 'matrix': []}), 401
+
     conn = get_db_connection()
     coin_ids = []
     if conn:
@@ -1847,7 +1850,7 @@ def correlation_matrix():
             cursor.execute("SELECT DISTINCT coin_id FROM transactions WHERE user_id = %s", (session['user_id'],))
             coin_ids = [row['coin_id'] for row in cursor.fetchall()]
         except mysql.connector.Error as err:
-            flash(f"Database error: {err}", "error")
+            return jsonify({'error': f'Database error: {err}', 'labels': [], 'matrix': []}), 500
         finally:
             if conn.is_connected():
                 cursor.close()
