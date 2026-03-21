@@ -1,0 +1,231 @@
+{% extends "combined.html" %}
+
+{% block title %}Strategy Backtester{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-danger">
+    <h4>Error loading backtester:</h4>
+    <pre>{{ error }}</pre>
+    <p>Please try again or contact support if the issue persists.</p>
+</div>
+{% endif %}
+<div class="container mt-4">
+    <h2>Strategy Backtester</h2>
+    <p>Test your trading strategies against historical data.</p>
+    
+    <div class="card mb-4">
+        <div class="card-header">Backtest Parameters</div>
+        <div class="card-body">
+            <form id="backtestForm">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="coinSelect" class="form-label">Cryptocurrency</label>
+                        <select class="form-select" id="coinSelect" required>
+                            <option value="">Select a coin</option>
+                            {% for coin in coins %}
+                            <option value="{{ coin.id }}">{{ coin.name }} ({{ coin.symbol|upper }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="timeframe" class="form-label">Timeframe</label>
+                        <select class="form-select" id="timeframe">
+                            <option value="1">1 Day</option>
+                            <option value="7">1 Week</option>
+                            <option value="30" selected>1 Month</option>
+                            <option value="90">3 Months</option>
+                            <option value="180">6 Months</option>
+                            <option value="365">1 Year</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="initialCapital" class="form-label">Initial Capital ($)</label>
+                        <input type="number" class="form-control" id="initialCapital" value="1000" min="1" step="0.01">
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="strategyCode" class="form-label">Strategy Code (Python)</label>
+                        <div class="border rounded p-2 bg-light mb-2">
+                            <pre class="mb-0"><code># Available variables: data (pandas DataFrame with OHLCV data), portfolio (starting with initial_capital)
+# Must return a dictionary with 'signals' (list of trade actions) and 'metrics'
+
+def simple_moving_average_strategy(data, portfolio):
+    # Calculate indicators
+    data['SMA_20'] = data['close'].rolling(window=20).mean()
+    data['SMA_50'] = data['close'].rolling(window=50).mean()
+    
+    # Generate signals
+    data['signal'] = 0
+    data.loc[data['SMA_20'] > data['SMA_50'], 'signal'] = 1  # Buy signal
+    data.loc[data['SMA_20'] < data['SMA_50'], 'signal'] = -1  # Sell signal
+    
+    # Calculate position (1 for long, -1 for short, 0 for neutral)
+    data['position'] = data['signal'].diff()
+    
+    # Calculate returns
+    data['daily_return'] = data['close'].pct_change()
+    data['strategy_return'] = data['position'].shift(1) * data['daily_return']
+    
+    # Calculate metrics
+    total_return = (1 + data['strategy_return']).prod() - 1
+    sharpe_ratio = (data['strategy_return'].mean() / data['strategy_return'].std()) * (252 ** 0.5)
+    
+    return {
+        'signals': data[['date', 'close', 'position']].to_dict('records'),
+        'metrics': {
+            'total_return': total_return * 100,  # as percentage
+            'sharpe_ratio': sharpe_ratio,
+            'max_drawdown': (data['strategy_return'].cumsum().cummax() - data['strategy_return'].cumsum()).max() * 100
+        }
+    }</code></pre>
+                        </div>
+                        <textarea class="form-control font-monospace" id="strategyCode" rows="15" style="font-family: 'Courier New', monospace; font-size: 0.9em;"></textarea>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Run Backtest</button>
+                <button type="button" class="btn btn-outline-secondary ms-2" id="loadExample">Load Example</button>
+            </form>
+        </div>
+    </div>
+    
+    <div id="results" class="d-none">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Performance Summary</h5>
+                        <div id="metrics" class="mb-3">
+                            <!-- Metrics will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Equity Curve</h5>
+                        <div id="equityChart" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">Trades</div>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Price</th>
+                            <th>Position</th>
+                            <th>P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradesTable">
+                        <!-- Trades will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Plotly for charts -->
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Load example code
+    $('#loadExample').click(function() {
+        const exampleCode = document.querySelector('pre code').textContent;
+        $('#strategyCode').val(exampleCode);
+    });
+    
+    // Handle form submission
+    $('#backtestForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            coin_id: $('#coinSelect').val(),
+            days: $('#timeframe').val(),
+            initial_capital: parseFloat($('#initialCapital').val()),
+            strategy_code: $('#strategyCode').val()
+        };
+        
+        // Show loading state
+        const submitBtn = $(this).find('button[type="submit"]');
+        const originalText = submitBtn.html();
+        submitBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Running...');
+        
+        // Send request to backtest endpoint
+        $.ajax({
+            url: '/api/backtest',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                // Display results
+                displayResults(response);
+                $('#results').removeClass('d-none');
+            },
+            error: function(xhr) {
+                alert('Error: ' + (xhr.responseJSON?.error || 'Failed to run backtest'));
+            },
+            complete: function() {
+                submitBtn.prop('disabled', false).html(originalText);
+            }
+        });
+    });
+    
+    function displayResults(data) {
+        // Update metrics
+        const metricsHtml = `
+            <p><strong>Total Return:</strong> <span class="${data.metrics.total_return >= 0 ? 'text-success' : 'text-danger'}">${data.metrics.total_return.toFixed(2)}%</span></p>
+            <p><strong>Sharpe Ratio:</strong> ${data.metrics.sharpe_ratio.toFixed(2)}</p>
+            <p><strong>Max Drawdown:</strong> ${data.metrics.max_drawdown.toFixed(2)}%</p>
+            <p><strong>Total Trades:</strong> ${data.trades.length}</p>
+            <p><strong>Win Rate:</strong> ${(data.metrics.win_rate * 100).toFixed(1)}%</p>
+        `;
+        $('#metrics').html(metricsHtml);
+        
+        // Update trades table
+        const tradesHtml = data.trades.map(trade => `
+            <tr>
+                <td>${new Date(trade.timestamp).toLocaleString()}</td>
+                <td><span class="badge bg-${trade.type === 'buy' ? 'success' : 'danger'}">${trade.type.toUpperCase()}</span></td>
+                <td>$${parseFloat(trade.price).toFixed(2)}</td>
+                <td>${trade.position}</td>
+                <td class="${trade.pnl >= 0 ? 'text-success' : 'text-danger'}">${trade.pnl >= 0 ? '+' : ''}${parseFloat(trade.pnl).toFixed(2)}%</td>
+            </tr>
+        `).join('');
+        $('#tradesTable').html(tradesHtml);
+        
+        // Create equity curve chart
+        const equityData = [{
+            x: data.equity_curve.map(point => new Date(point.timestamp)),
+            y: data.equity_curve.map(point => point.equity),
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Strategy Equity',
+            line: { color: '#4e73df' }
+        }];
+        
+        const layout = {
+            title: 'Equity Curve',
+            xaxis: { title: 'Date' },
+            yaxis: { title: 'Portfolio Value ($)' },
+            showlegend: true,
+            hovermode: 'x unified'
+        };
+        
+        Plotly.newPlot('equityChart', equityData, layout);
+    }
+});
+</script>
+{% endblock %}
