@@ -100,6 +100,73 @@ def get_db_connection():
         print(f"Database connection failed: {err}")
         return None
 
+
+def ensure_watchlist_scenarios_table(conn):
+    """Ensure scenario replay history table exists for watchlist simulator."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS watchlist_scenarios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            coin_id VARCHAR(64) NOT NULL,
+            replay_date DATE NOT NULL,
+            entry_price DECIMAL(18, 8) NOT NULL,
+            conservative_return DECIMAL(8, 2) NOT NULL,
+            rule_based_return DECIMAL(8, 2) NOT NULL,
+            emotional_return DECIMAL(8, 2) NOT NULL,
+            best_strategy VARCHAR(64) NOT NULL,
+            prep_score INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user_coin_created (user_id, coin_id, created_at)
+        )
+        """
+    )
+    conn.commit()
+    cursor.close()
+
+
+def ensure_price_alerts_schema(conn):
+    """Ensure extended alert fields and history table exist."""
+    cursor = conn.cursor()
+
+    cursor.execute("SHOW COLUMNS FROM price_alerts LIKE 'note'")
+    if not cursor.fetchone():
+        cursor.execute("ALTER TABLE price_alerts ADD COLUMN note VARCHAR(500) NULL")
+
+    cursor.execute("SHOW COLUMNS FROM price_alerts LIKE 'snoozed_until'")
+    if not cursor.fetchone():
+        cursor.execute("ALTER TABLE price_alerts ADD COLUMN snoozed_until DATETIME NULL")
+
+    cursor.execute("SHOW COLUMNS FROM price_alerts LIKE 'triggered_at'")
+    if not cursor.fetchone():
+        cursor.execute("ALTER TABLE price_alerts ADD COLUMN triggered_at DATETIME NULL")
+
+    cursor.execute("SHOW COLUMNS FROM price_alerts LIKE 'trigger_price'")
+    if not cursor.fetchone():
+        cursor.execute("ALTER TABLE price_alerts ADD COLUMN trigger_price DECIMAL(15, 2) NULL")
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS price_alert_history (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            alert_id INT NULL,
+            coin_id VARCHAR(50) NOT NULL,
+            target_price DECIMAL(15, 2) NOT NULL,
+            trigger_price DECIMAL(15, 2) NOT NULL,
+            alert_type ENUM('above', 'below') NOT NULL,
+            note VARCHAR(500) NULL,
+            triggered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user_triggered (user_id, triggered_at),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+    conn.commit()
+    cursor.close()
+
 def generate_verification_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
@@ -347,8 +414,17 @@ def check_price_alerts():
         print("Database connection failed in price alert check")
         return
     try:
+        ensure_price_alerts_schema(conn)
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT pa.*, u.email as user_email FROM price_alerts pa JOIN users u ON pa.user_id = u.id WHERE pa.notified = 0")
+        cursor.execute(
+            """
+            SELECT pa.*, u.email as user_email
+            FROM price_alerts pa
+            JOIN users u ON pa.user_id = u.id
+            WHERE pa.notified = 0
+              AND (pa.snoozed_until IS NULL OR pa.snoozed_until <= NOW())
+            """
+        )
         alerts = cursor.fetchall()
         if not alerts:
             return
@@ -373,7 +449,29 @@ def check_price_alerts():
                     "INSERT INTO notifications (user_id, coin_id, message) VALUES (%s, %s, %s)",
                     (alert['user_id'], coin_id, message)
                 )
-                cursor.execute("UPDATE price_alerts SET notified = 1 WHERE id = %s", (alert['id'],))
+
+                cursor.execute(
+                    """
+                    INSERT INTO price_alert_history
+                    (user_id, alert_id, coin_id, target_price, trigger_price, alert_type, note, triggered_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    """,
+                    (
+                        alert['user_id'], alert['id'], coin_id,
+                        target_price, current_price, alert_type, alert.get('note')
+                    )
+                )
+
+                cursor.execute(
+                    """
+                    UPDATE price_alerts
+                    SET notified = 1,
+                        triggered_at = NOW(),
+                        trigger_price = %s
+                    WHERE id = %s
+                    """,
+                    (current_price, alert['id'])
+                )
                 conn.commit()
                 print(f"Notification triggered for user {alert['user_id']}: {message}")
                 # Send email notification to the user's email
@@ -1034,7 +1132,8 @@ def dashboard():
         coins=coins,
         user=user,
         triggered_alerts=triggered_alerts,
-        sold_transactions=sold_transactions
+        sold_transactions=sold_transactions,
+        next_check_seconds=CHECK_INTERVAL
     )
 
 @app.route('/dismiss_alert/<int:notification_id>', methods=['POST'])
@@ -1076,6 +1175,20 @@ def refresh_alerts():
 def live_market():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+
+    def safe_float(value, default=0.0):
+        """Coerce possibly-null/non-numeric API values into floats for template safety."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def safe_int(value, default=0):
+        """Coerce possibly-null/non-numeric API values into ints for template safety."""
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
     page = int(request.args.get('page', 1))
     coins = []
     response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page={COINS_PER_PAGE}&page={page}&sparkline=false")
@@ -1083,9 +1196,12 @@ def live_market():
         coins = json.loads(response.text)
         # Enhance each coin with 24h high/low data
         for coin in coins:
-            coin['high_24h'] = coin.get('high_24h', 'N/A')
-            coin['low_24h'] = coin.get('low_24h', 'N/A')
-            coin['total_volume'] = coin.get('total_volume', 'N/A')
+            coin['current_price'] = safe_float(coin.get('current_price'))
+            coin['price_change_percentage_24h'] = safe_float(coin.get('price_change_percentage_24h'))
+            coin['market_cap'] = safe_int(coin.get('market_cap'))
+            coin['high_24h'] = safe_float(coin.get('high_24h'))
+            coin['low_24h'] = safe_float(coin.get('low_24h'))
+            coin['total_volume'] = safe_float(coin.get('total_volume'))
     else:
         flash("Failed to fetch live market data. Using cached data if available.", "warning")
     total_coins = 1000
@@ -1528,6 +1644,24 @@ def portfolio():
 def watchlist():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
+
+    def safe_float(value, default=0.0):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def build_prep_signal(coin):
+        change = safe_float(coin.get('price_change_percentage_24h'))
+        market_cap = safe_float(coin.get('market_cap'))
+
+        if change >= 4:
+            return "Momentum Drill", "signal-momentum"
+        if change <= -4:
+            return "Dip-Defense Drill", "signal-defense"
+        if market_cap >= 100000000000:
+            return "Stability Anchor", "signal-stability"
+        return "Range Practice", "signal-range"
     conn = get_db_connection()
     if conn is None:
         flash("Database connection failed", "error")
@@ -1584,6 +1718,15 @@ def watchlist():
             cursor.close()
             conn.close()
     coins = []
+    watchlist_insights = {
+        'total': 0,
+        'up_count': 0,
+        'down_count': 0,
+        'avg_change': 0.0,
+        'market_focus': 'Balanced',
+        'readiness_score': 50,
+        'coach_tip': 'Build your watchlist to receive simulation coaching.'
+    }
     if watchlist:
         coin_ids = ','.join([w['coin_id'] for w in watchlist])
         response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}&order=market_cap_desc&sparkline=false")
@@ -1597,18 +1740,64 @@ def watchlist():
                     'id': coin_id,
                     'name': coin_id.capitalize(),
                     'symbol': coin_id[:3].upper(),
-                    'current_price': 'N/A',
-                    'price_change_percentage_24h': 'N/A',
-                    'market_cap': 'N/A'
+                    'current_price': 0.0,
+                    'price_change_percentage_24h': 0.0,
+                    'market_cap': 0.0
                 })
         else:
             flash("Failed to fetch watchlist data. Using cached data if available.", "warning")
             coins = [{'id': w['coin_id'], 'name': w['coin_id'].capitalize(), 'symbol': w['coin_id'][:3].upper(), 
-                      'current_price': 'N/A', 'price_change_percentage_24h': 'N/A', 'market_cap': 'N/A'} 
+                      'current_price': 0.0, 'price_change_percentage_24h': 0.0, 'market_cap': 0.0} 
                      for w in watchlist]
+
+        for coin in coins:
+            coin['current_price'] = safe_float(coin.get('current_price'))
+            coin['price_change_percentage_24h'] = safe_float(coin.get('price_change_percentage_24h'))
+            coin['market_cap'] = safe_float(coin.get('market_cap'))
+            signal, signal_class = build_prep_signal(coin)
+            coin['prep_signal'] = signal
+            coin['prep_signal_class'] = signal_class
+
+        if coins:
+            up_count = sum(1 for coin in coins if coin['price_change_percentage_24h'] > 0)
+            down_count = sum(1 for coin in coins if coin['price_change_percentage_24h'] < 0)
+            avg_change = sum(coin['price_change_percentage_24h'] for coin in coins) / len(coins)
+            total_market_cap = sum(max(coin['market_cap'], 0) for coin in coins)
+            top_market_cap = max((coin['market_cap'] for coin in coins), default=0)
+            concentration = (top_market_cap / total_market_cap * 100) if total_market_cap > 0 else 0
+
+            if concentration > 70:
+                market_focus = 'High Concentration'
+                coach_tip = 'Your watchlist is heavily concentrated. Simulate position sizing to reduce single-coin risk.'
+            elif abs(avg_change) >= 3:
+                market_focus = 'High Volatility'
+                coach_tip = 'Large daily swings detected. Practice stop-loss and take-profit placement before live trading.'
+            elif up_count >= down_count:
+                market_focus = 'Trend-Friendly'
+                coach_tip = 'Trend setup detected. Test entry timing with staggered buys in simulator mode.'
+            else:
+                market_focus = 'Pullback Phase'
+                coach_tip = 'Market is cooling. Run defensive scenarios and compare max drawdown outcomes.'
+
+            readiness_score = 55
+            readiness_score += min(len(coins) * 4, 20)
+            readiness_score += min(max(avg_change, 0), 5) * 2
+            readiness_score -= max(concentration - 55, 0) * 0.35
+            readiness_score = int(max(1, min(99, round(readiness_score))))
+
+            watchlist_insights = {
+                'total': len(coins),
+                'up_count': up_count,
+                'down_count': down_count,
+                'avg_change': round(avg_change, 2),
+                'market_focus': market_focus,
+                'readiness_score': readiness_score,
+                'coach_tip': coach_tip
+            }
     else:
         flash("Your watchlist is empty. Add some coins to track!", "info")
-    return render_template('combined.html', section='watchlist', coins=coins, available_coins=available_coins)
+    return render_template('combined.html', section='watchlist', coins=coins, available_coins=available_coins,
+                         watchlist_insights=watchlist_insights)
 
 @app.route('/alerts', methods=['GET', 'POST'])
 def alerts():
@@ -1626,11 +1815,15 @@ def alerts():
         target_price = request.form.get('target_price')
         alert_type = request.form.get('alert_type')
         order_type = request.form.get('order_type')
+        alert_note = request.form.get('alert_note', '').strip()
         if not all([coin_id, target_price, alert_type, order_type]):
             flash("All fields are required", "error")
             return redirect(url_for('alerts'))
         # Validate coin_id
         coin_exists = any(coin['id'] == coin_id for coin in available_coins)
+        if not coin_exists:
+            coin_check_response = fetch_with_retry(f"{COINGECKO_API}/coins/{coin_id}")
+            coin_exists = coin_check_response is not None
         if not coin_exists:
             flash(f"Coin '{coin_id}' not found. Please select a valid coin.", "error")
             return redirect(url_for('alerts'))
@@ -1645,6 +1838,7 @@ def alerts():
         conn = get_db_connection()
         if conn:
             try:
+                ensure_price_alerts_schema(conn)
                 cursor = conn.cursor(dictionary=True)
                 # Get user's email
                 cursor.execute("SELECT email FROM users WHERE id = %s", (session['user_id'],))
@@ -1656,9 +1850,9 @@ def alerts():
                 # Insert the alert with user's email
                 cursor.execute("""
                     INSERT INTO price_alerts 
-                    (user_id, user_email, coin_id, target_price, alert_type, order_type, notified) 
-                    VALUES (%s, %s, %s, %s, %s, %s, 0)
-                """, (session['user_id'], user['email'], coin_id, target_price, alert_type, order_type))
+                    (user_id, user_email, coin_id, target_price, alert_type, order_type, notified, note) 
+                    VALUES (%s, %s, %s, %s, %s, %s, 0, %s)
+                """, (session['user_id'], user['email'], coin_id, target_price, alert_type, order_type, alert_note[:500]))
                 conn.commit()
                 flash("Alert set successfully. You will receive email notifications when the price is reached.", "success")
             except mysql.connector.Error as err:
@@ -1669,20 +1863,81 @@ def alerts():
                     conn.close()
     conn = get_db_connection()
     alerts = []
+    alert_history = []
+    next_check_seconds = CHECK_INTERVAL
     if conn:
         try:
+            ensure_price_alerts_schema(conn)
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM price_alerts WHERE user_id = %s", (session['user_id'],))
+            cursor.execute("SELECT * FROM price_alerts WHERE user_id = %s ORDER BY created_at DESC", (session['user_id'],))
             alerts = cursor.fetchall()
+
+            active_alerts = [a for a in alerts if not a.get('notified')]
+            if active_alerts:
+                coin_ids = sorted(set(a['coin_id'] for a in active_alerts if a.get('coin_id')))
+                coin_ids_str = ','.join(coin_ids)
+                response = fetch_with_retry(f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}")
+                price_map = {}
+                if response:
+                    price_map = {
+                        coin['id']: float(coin['current_price'])
+                        for coin in json.loads(response.text)
+                        if 'id' in coin and coin.get('current_price') is not None
+                    }
+
+                for alert in alerts:
+                    current_price = price_map.get(alert['coin_id'])
+                    alert['current_price'] = current_price
+                    alert['status'] = 'Triggered' if alert['notified'] else 'Watching'
+
+                    if alert.get('notified'):
+                        alert['progress_pct'] = 100
+                    elif current_price is not None:
+                        target_price = float(alert['target_price'])
+                        if alert['alert_type'] == 'above':
+                            pct = (current_price / target_price) * 100 if target_price > 0 else 0
+                        else:
+                            pct = (target_price / max(current_price, 0.0001)) * 100 if target_price > 0 else 0
+                        alert['progress_pct'] = int(max(0, min(100, round(pct))))
+                    else:
+                        alert['progress_pct'] = 0
+            else:
+                for alert in alerts:
+                    alert['current_price'] = None
+                    alert['status'] = 'Triggered' if alert['notified'] else 'Watching'
+                    alert['progress_pct'] = 100 if alert.get('notified') else 0
+
+            cursor.execute(
+                """
+                SELECT coin_id, target_price, trigger_price, alert_type, note, triggered_at
+                FROM price_alert_history
+                WHERE user_id = %s
+                ORDER BY triggered_at DESC
+                LIMIT 30
+                """,
+                (session['user_id'],)
+            )
+            alert_history = cursor.fetchall()
+
             for alert in alerts:
-                alert['status'] = 'Triggered' if alert['notified'] else 'Pending'
+                snoozed_until = alert.get('snoozed_until')
+                if snoozed_until and isinstance(snoozed_until, datetime) and snoozed_until > datetime.now():
+                    alert['status'] = 'Snoozed'
+
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
-    return render_template('combined.html', section='alerts', alerts=alerts, available_coins=available_coins)
+    return render_template(
+        'combined.html',
+        section='alerts',
+        alerts=alerts,
+        alert_history=alert_history,
+        available_coins=available_coins,
+        next_check_seconds=next_check_seconds
+    )
 
 @app.route('/remove_alert/<int:alert_id>', methods=['POST'])
 def remove_alert(alert_id):
@@ -1704,6 +1959,39 @@ def remove_alert(alert_id):
             if conn.is_connected():
                 cursor.close()
                 conn.close()
+    return redirect(url_for('alerts'))
+
+
+@app.route('/snooze_alert/<int:alert_id>', methods=['POST'])
+def snooze_alert(alert_id):
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    if conn:
+        try:
+            ensure_price_alerts_schema(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE price_alerts
+                SET snoozed_until = DATE_ADD(NOW(), INTERVAL 24 HOUR)
+                WHERE id = %s AND user_id = %s AND notified = 0
+                """,
+                (alert_id, session['user_id'])
+            )
+            if cursor.rowcount > 0:
+                conn.commit()
+                flash("Alert snoozed for 24 hours.", "success")
+            else:
+                flash("Alert not found or already triggered.", "warning")
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+
     return redirect(url_for('alerts'))
 
 @app.route('/orders')
@@ -1836,6 +2124,224 @@ def historical(coin_id):
             'market_caps': market_caps
         })
     return jsonify({'error': 'Failed to fetch historical data'}), 500
+
+
+@app.route('/api/scenario_replay/<coin_id>')
+def scenario_replay(coin_id):
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    replay_date_raw = request.args.get('date', '').strip()
+    if not replay_date_raw:
+        return jsonify({'error': 'Date is required'}), 400
+
+    try:
+        replay_date = datetime.strptime(replay_date_raw, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    response = fetch_with_retry(f"{COINGECKO_API}/coins/{coin_id}/market_chart?vs_currency=usd&days=30")
+    if not response:
+        return jsonify({'error': 'Failed to fetch historical data'}), 500
+
+    data = json.loads(response.text)
+    price_points = data.get('prices', [])
+    if len(price_points) < 6:
+        return jsonify({'error': 'Not enough historical data for replay'}), 400
+
+    series = []
+    for ts, price in price_points:
+        dt = datetime.fromtimestamp(ts / 1000).date()
+        try:
+            p = float(price)
+        except (TypeError, ValueError):
+            continue
+        series.append({'date': dt, 'price': p})
+
+    if len(series) < 6:
+        return jsonify({'error': 'Not enough valid historical points'}), 400
+
+    entry_idx = min(range(len(series)), key=lambda i: abs((series[i]['date'] - replay_date).days))
+    # Keep enough lookahead for scenario outcomes.
+    entry_idx = max(0, min(entry_idx, len(series) - 4))
+
+    entry_point = series[entry_idx]
+    next_point = series[min(entry_idx + 1, len(series) - 1)]
+    lookahead = series[entry_idx + 1:min(entry_idx + 4, len(series))]
+    if not lookahead:
+        lookahead = [next_point]
+
+    entry_price = entry_point['price']
+    next_price = next_point['price']
+    max_price = max(p['price'] for p in lookahead)
+    min_price = min(p['price'] for p in lookahead)
+    end_price = lookahead[-1]['price']
+
+    conservative_return = ((next_price - entry_price) / entry_price) * 100 * 0.75
+    rule_based_return = ((end_price - entry_price) / entry_price) * 100
+
+    # Emotional outcome amplifies losses and often cuts winners early.
+    if end_price >= entry_price:
+        emotional_anchor = ((max_price - entry_price) / entry_price) * 100 * 0.35
+        emotional_return = emotional_anchor - 0.8
+    else:
+        emotional_return = ((min_price - entry_price) / entry_price) * 100 * 1.15
+
+    conservative_return = round(max(-8.5, min(12.5, conservative_return)), 2)
+    rule_based_return = round(max(-10.0, min(18.0, rule_based_return)), 2)
+    emotional_return = round(max(-15.0, min(10.0, emotional_return)), 2)
+
+    outcomes = [
+        {'label': 'Conservative Exit', 'value': conservative_return},
+        {'label': 'Rule-Based Exit', 'value': rule_based_return},
+        {'label': 'Emotional Exit', 'value': emotional_return}
+    ]
+    outcomes.sort(key=lambda x: x['value'], reverse=True)
+    best_strategy = outcomes[0]['label']
+
+    edge_vs_emotional = rule_based_return - emotional_return
+    price_range_pct = ((max_price - min_price) / entry_price) * 100 if entry_price > 0 else 0
+    prep_score = 52 + edge_vs_emotional * 5.4 - max(price_range_pct - 6, 0) * 1.1
+    prep_score = int(max(1, min(99, round(prep_score))))
+
+    if edge_vs_emotional >= 2:
+        lesson = (
+            f"Rule-based planning beat emotional behavior by {edge_vs_emotional:.2f}%. "
+            "Use this replay to lock in stop-loss and take-profit rules before executing a trade."
+        )
+    else:
+        lesson = (
+            f"The edge is narrow ({edge_vs_emotional:.2f}% vs emotional). "
+            "On choppy sessions, improve entry timing and reduce position size in simulation first."
+        )
+
+    return jsonify({
+        'coin_id': coin_id,
+        'requested_date': replay_date_raw,
+        'used_date': entry_point['date'].isoformat(),
+        'entry_price': round(entry_price, 6),
+        'conservative_return': conservative_return,
+        'rule_based_return': rule_based_return,
+        'emotional_return': emotional_return,
+        'best_strategy': best_strategy,
+        'prep_score': prep_score,
+        'lesson': lesson
+    })
+
+
+@app.route('/api/scenario_replay/save', methods=['POST'])
+def save_scenario_replay():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    payload = request.get_json(silent=True) or {}
+    coin_id = str(payload.get('coin_id', '')).strip().lower()
+    used_date = str(payload.get('used_date', '')).strip()
+
+    if not coin_id or not used_date:
+        return jsonify({'error': 'coin_id and used_date are required'}), 400
+
+    try:
+        replay_date = datetime.strptime(used_date, '%Y-%m-%d').date()
+        entry_price = float(payload.get('entry_price', 0))
+        conservative_return = float(payload.get('conservative_return', 0))
+        rule_based_return = float(payload.get('rule_based_return', 0))
+        emotional_return = float(payload.get('emotional_return', 0))
+        best_strategy = str(payload.get('best_strategy', 'Rule-Based Exit')).strip()[:64]
+        prep_score = int(payload.get('prep_score', 50))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid payload values'}), 400
+
+    prep_score = max(1, min(99, prep_score))
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        ensure_watchlist_scenarios_table(conn)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO watchlist_scenarios (
+                user_id, coin_id, replay_date, entry_price,
+                conservative_return, rule_based_return, emotional_return,
+                best_strategy, prep_score
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                session['user_id'], coin_id, replay_date, entry_price,
+                conservative_return, rule_based_return, emotional_return,
+                best_strategy, prep_score
+            )
+        )
+        conn.commit()
+        cursor.close()
+        return jsonify({'ok': True})
+    except mysql.connector.Error as err:
+        return jsonify({'error': str(err)}), 500
+    finally:
+        if conn.is_connected():
+            conn.close()
+
+
+@app.route('/api/scenario_replay/history')
+def scenario_replay_history():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    coin_id = request.args.get('coin_id', '').strip().lower()
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        ensure_watchlist_scenarios_table(conn)
+        cursor = conn.cursor(dictionary=True)
+
+        if coin_id:
+            cursor.execute(
+                """
+                SELECT replay_date, prep_score, best_strategy,
+                       conservative_return, rule_based_return, emotional_return, created_at
+                FROM watchlist_scenarios
+                WHERE user_id = %s AND coin_id = %s
+                ORDER BY created_at DESC
+                LIMIT 12
+                """,
+                (session['user_id'], coin_id)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT coin_id, replay_date, prep_score, best_strategy,
+                       conservative_return, rule_based_return, emotional_return, created_at
+                FROM watchlist_scenarios
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 12
+                """,
+                (session['user_id'],)
+            )
+
+        rows = cursor.fetchall()
+        cursor.close()
+
+        for row in rows:
+            if isinstance(row.get('replay_date'), datetime):
+                row['replay_date'] = row['replay_date'].date().isoformat()
+            elif hasattr(row.get('replay_date'), 'isoformat'):
+                row['replay_date'] = row['replay_date'].isoformat()
+
+            if isinstance(row.get('created_at'), datetime):
+                row['created_at'] = row['created_at'].isoformat()
+
+        return jsonify({'history': rows})
+    except mysql.connector.Error as err:
+        return jsonify({'error': str(err)}), 500
+    finally:
+        if conn.is_connected():
+            conn.close()
 
 @app.route('/correlation_matrix')
 def correlation_matrix():
@@ -2341,6 +2847,535 @@ try:
 except Exception as e:
     print(f"⚠️  Could not initialize AI Learning System: {e}")
     print("   App will run without learning features")
+
+# ===========================================================================
+# AI TRADING COACH
+# ===========================================================================
+
+@app.route('/api/trading_coach')
+def trading_coach_api():
+    """Analyze user's trade history and provide behavioral coaching."""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user_id = session['user_id']
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # ── 1. Fetch completed sell trades (closed positions) ──
+        cursor.execute("""
+            SELECT t.id, t.coin_id, t.amount, t.price AS buy_price,
+                   t.sold_price, t.timestamp AS sell_time,
+                   t.buy_transaction_id,
+                   bt.timestamp AS buy_time
+            FROM transactions t
+            LEFT JOIN transactions bt ON t.buy_transaction_id = bt.id
+            WHERE t.user_id = %s AND t.type = 'sell'
+              AND t.sold_price IS NOT NULL AND t.price IS NOT NULL
+            ORDER BY t.timestamp DESC
+            LIMIT 50
+        """, (user_id,))
+        sells = cursor.fetchall()
+
+        # ── 2. Fetch order history (for stop-loss / take-profit detection) ──
+        cursor.execute("""
+            SELECT id, order_type, side, base_currency, status,
+                   created_at, filled_at
+            FROM orders
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT 100
+        """, (user_id,))
+        orders = cursor.fetchall()
+
+        # ── 3. Count total buy transactions for overtrading detection ──
+        cursor.execute("""
+            SELECT COUNT(*) AS total_buys,
+                   MIN(timestamp) AS first_trade,
+                   MAX(timestamp) AS last_trade
+            FROM transactions
+            WHERE user_id = %s AND type = 'buy'
+        """, (user_id,))
+        buy_stats = cursor.fetchone()
+
+        if not sells or len(sells) < 2:
+            return jsonify({
+                'has_data': False,
+                'message': 'Complete at least 2 trades (buy + sell) to unlock your AI coaching report.'
+            })
+
+        # ── Build trade summaries ──
+        trades = []
+        for s in sells:
+            bp = float(s['buy_price']) if s['buy_price'] else 0
+            sp = float(s['sold_price']) if s['sold_price'] else 0
+            amt = float(s['amount']) if s['amount'] else 0
+
+            pl_pct = ((sp - bp) / bp * 100) if bp > 0 else 0
+            pl_abs = (sp - bp) * amt
+
+            # Holding time
+            hold_seconds = 0
+            hold_label = 'Unknown'
+            if s.get('buy_time') and s.get('sell_time'):
+                delta = s['sell_time'] - s['buy_time']
+                hold_seconds = delta.total_seconds()
+                if hold_seconds < 300:
+                    hold_label = 'Scalp (<5m)'
+                elif hold_seconds < 3600:
+                    hold_label = 'Short (<1h)'
+                elif hold_seconds < 86400:
+                    hold_label = 'Intraday'
+                elif hold_seconds < 604800:
+                    hold_label = 'Swing (days)'
+                else:
+                    hold_label = 'Position (1w+)'
+
+            # Stop-loss / Take-profit usage detection
+            used_sl = False
+            used_tp = False
+            for o in orders:
+                if (o['base_currency'] == s['coin_id']
+                        and o['status'] == 'filled'
+                        and o['side'] == 'sell'):
+                    if o['order_type'] == 'stop_loss':
+                        used_sl = True
+                    elif o['order_type'] == 'take_profit':
+                        used_tp = True
+
+            # Classify entry timing heuristically
+            entry_timing = 'Confirmed'
+            if hold_seconds > 0 and hold_seconds < 120:
+                entry_timing = 'Early'
+            elif hold_seconds > 604800:
+                entry_timing = 'Late'
+
+            # Detect mistake type
+            mistake = None
+            if pl_pct < -15:
+                mistake = 'Large loss – no stop-loss' if not used_sl else 'Large loss despite stop-loss'
+            elif pl_pct < -5 and hold_seconds < 600:
+                mistake = 'Panic sell'
+            elif pl_pct > 0 and pl_pct < 2 and hold_seconds > 86400:
+                mistake = 'Held too long for tiny gain'
+            elif pl_pct > 15 and not used_tp:
+                mistake = 'No take-profit set on winner'
+
+            trades.append({
+                'coin': s['coin_id'],
+                'pl_pct': round(pl_pct, 2),
+                'pl_abs': round(pl_abs, 2),
+                'used_stop_loss': used_sl,
+                'used_take_profit': used_tp,
+                'entry_timing': entry_timing,
+                'hold_time': hold_label,
+                'hold_seconds': hold_seconds,
+                'mistake': mistake,
+            })
+
+        # ── 4. Pattern detection ──
+        n = len(trades)
+        wins = [t for t in trades if t['pl_pct'] > 0]
+        losses = [t for t in trades if t['pl_pct'] <= 0]
+        win_rate = len(wins) / n * 100
+
+        sl_count = sum(1 for t in trades if t['used_stop_loss'])
+        sl_rate = sl_count / n * 100
+
+        tp_count = sum(1 for t in trades if t['used_take_profit'])
+        tp_rate = tp_count / n * 100
+
+        early_count = sum(1 for t in trades if t['entry_timing'] == 'Early')
+        early_rate = early_count / n * 100
+
+        panic_sells = sum(1 for t in trades if t['mistake'] == 'Panic sell')
+        large_losses = sum(1 for t in trades if t['mistake'] and 'Large loss' in t['mistake'])
+        no_tp_on_wins = sum(1 for t in trades if t['mistake'] == 'No take-profit set on winner')
+
+        avg_hold = sum(t['hold_seconds'] for t in trades if t['hold_seconds'] > 0)
+        avg_hold = avg_hold / n if n > 0 else 0
+
+        avg_win = sum(t['pl_pct'] for t in wins) / len(wins) if wins else 0
+        avg_loss = sum(t['pl_pct'] for t in losses) / len(losses) if losses else 0
+
+        # Overtrading: more than 5 trades per day on average
+        total_buys = buy_stats['total_buys'] or 0
+        trading_days = 1
+        if buy_stats.get('first_trade') and buy_stats.get('last_trade'):
+            span = (buy_stats['last_trade'] - buy_stats['first_trade']).total_seconds()
+            trading_days = max(span / 86400, 1)
+        trades_per_day = total_buys / trading_days
+        is_overtrading = trades_per_day > 5
+
+        # ── 5. Classify user type ──
+        scores = {
+            'Impulsive Trader': 0,
+            'Risk-Aware Beginner': 0,
+            'Overcautious Trader': 0,
+            'Disciplined Trader': 0,
+            'Inconsistent Trader': 0,
+        }
+
+        # Impulsive
+        if early_rate > 40:
+            scores['Impulsive Trader'] += 3
+        if panic_sells >= 2:
+            scores['Impulsive Trader'] += 3
+        if is_overtrading:
+            scores['Impulsive Trader'] += 2
+        if sl_rate < 20:
+            scores['Impulsive Trader'] += 2
+
+        # Risk-Aware Beginner
+        if sl_rate > 30 and sl_rate < 70:
+            scores['Risk-Aware Beginner'] += 3
+        if win_rate > 35 and win_rate < 55:
+            scores['Risk-Aware Beginner'] += 2
+        if avg_hold > 3600:
+            scores['Risk-Aware Beginner'] += 1
+
+        # Overcautious
+        if avg_hold > 259200:  # 3+ days avg
+            scores['Overcautious Trader'] += 3
+        if win_rate > 50 and avg_win < 3:
+            scores['Overcautious Trader'] += 3
+        if tp_rate > 60:
+            scores['Overcautious Trader'] += 2
+
+        # Disciplined
+        if sl_rate > 60:
+            scores['Disciplined Trader'] += 3
+        if win_rate > 50:
+            scores['Disciplined Trader'] += 2
+        if not is_overtrading:
+            scores['Disciplined Trader'] += 1
+        if panic_sells == 0:
+            scores['Disciplined Trader'] += 2
+
+        # Inconsistent
+        if sl_rate > 20 and sl_rate < 60:
+            scores['Inconsistent Trader'] += 1
+        if abs(avg_win) > 0 and abs(avg_loss) > 0:
+            rr = abs(avg_win / avg_loss) if avg_loss != 0 else 99
+            if 0.5 < rr < 1.5 and win_rate > 40 and win_rate < 60:
+                scores['Inconsistent Trader'] += 3
+        variations = [t['pl_pct'] for t in trades]
+        if len(variations) > 3:
+            import statistics
+            pl_stdev = statistics.stdev(variations)
+            if pl_stdev > 10:
+                scores['Inconsistent Trader'] += 2
+
+        user_type = max(scores, key=scores.get)
+
+        # ── 6. Strengths / Weaknesses ──
+        strengths = []
+        weaknesses = []
+
+        if win_rate >= 55:
+            strengths.append(f'Solid win rate of {win_rate:.0f}% – you pick profitable entries')
+        elif win_rate >= 45:
+            strengths.append(f'Near-balanced win rate ({win_rate:.0f}%) – room to grow but not reckless')
+
+        if sl_rate >= 50:
+            strengths.append(f'Uses stop-loss on {sl_rate:.0f}% of trades – good risk management habit')
+        if panic_sells == 0 and n >= 3:
+            strengths.append('No panic-sell behavior detected – emotionally steady')
+        if avg_hold > 3600 and avg_hold < 604800:
+            strengths.append('Balanced holding times – lets trades develop without overholding')
+
+        if not strengths:
+            strengths.append('Taking trades and gaining experience – every trade teaches something')
+
+        if sl_rate < 30:
+            weaknesses.append(f'Stop-loss used on only {sl_rate:.0f}% of trades – high drawdown risk')
+        if panic_sells >= 2:
+            weaknesses.append(f'Panic-sold {panic_sells} times – reacting emotionally to dips')
+        if is_overtrading:
+            weaknesses.append(f'Averaging {trades_per_day:.1f} trades/day – signs of overtrading')
+        if early_rate > 40:
+            weaknesses.append(f'{early_rate:.0f}% of entries are early (< 2 min holds) – entering before confirmation')
+        if large_losses >= 2:
+            weaknesses.append(f'{large_losses} trades with 15%+ losses – missing downside protection')
+        if win_rate < 40:
+            weaknesses.append(f'Win rate of {win_rate:.0f}% – more losing trades than winners')
+
+        if not weaknesses:
+            weaknesses.append('Keep tracking – more data will reveal clearer patterns')
+
+        # Trim to 2 each
+        strengths = strengths[:2]
+        weaknesses = weaknesses[:2]
+
+        # ── 7. Critical pattern (ALWAYS meaningful – never generic) ──
+        # Compute reward-to-risk ratio for deeper analysis
+        rr_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else (99 if avg_win > 0 else 0)
+
+        critical_patterns = []
+        if sl_rate < 25:
+            critical_patterns.append(('Skipping stop-loss frequently – exposing capital to unlimited downside', 92))
+        if panic_sells >= 2:
+            critical_patterns.append(('Panic selling during price dips – exits driven by fear, not strategy', 85))
+        if is_overtrading:
+            critical_patterns.append(('Overtrading – quantity over quality dilutes edge', 80))
+        if early_rate > 50:
+            critical_patterns.append(('Entering trades too early without confirmation signals', 75))
+        if large_losses >= 2 and sl_rate < 40:
+            critical_patterns.append(('Taking large unprotected losses – single trades wiping out multiple winners', 88))
+        if win_rate < 35:
+            critical_patterns.append(('Low win rate indicates poor entry selection or timing', 70))
+
+        # Deeper structural patterns (applied even when no "mistakes" exist)
+        if rr_ratio < 1.0 and avg_loss != 0:
+            critical_patterns.append((
+                f'Losses are larger than wins (avg loss {avg_loss:+.1f}% vs avg win {avg_win:+.1f}%) – '
+                f'a single loss erases {1/rr_ratio:.1f}x of your average win',
+                86
+            ))
+        if win_rate < 50 and rr_ratio < 1.5:
+            critical_patterns.append((
+                f'Win rate ({win_rate:.0f}%) and reward-to-risk ({rr_ratio:.1f}:1) are both below breakeven thresholds – '
+                f'you need either higher accuracy or bigger winners to be profitable',
+                83
+            ))
+        if win_rate >= 50 and avg_win < 3:
+            critical_patterns.append((
+                f'Cutting winners too short – you win {win_rate:.0f}% of trades but average only +{avg_win:.1f}% per win',
+                72
+            ))
+        if no_tp_on_wins >= 2:
+            critical_patterns.append((
+                f'{no_tp_on_wins} winning trades had no take-profit set – you\'re leaving gains to chance',
+                68
+            ))
+        # Inconsistent trade selection
+        if len(variations) > 3:
+            import statistics as _stats
+            _stdev = _stats.stdev(variations)
+            if _stdev > 12:
+                critical_patterns.append((
+                    f'High P/L variance (σ={_stdev:.1f}%) – trade selection is inconsistent, suggesting no repeatable strategy',
+                    74
+                ))
+
+        # Fallback: always provide a meaningful limitation
+        if not critical_patterns:
+            if rr_ratio >= 1.0 and win_rate >= 50:
+                critical_patterns.append((
+                    f'Solid fundamentals but limited sample ({n} trades) – '
+                    f'current edge of {rr_ratio:.1f}:1 R:R at {win_rate:.0f}% accuracy needs validation over 20+ trades',
+                    50
+                ))
+            else:
+                critical_patterns.append((
+                    'No clear repeatable edge detected – trades appear reactive rather than strategy-driven',
+                    55
+                ))
+
+        critical_patterns.sort(key=lambda x: x[1], reverse=True)
+        critical_pattern = critical_patterns[0][0]
+
+        # ── 8. Edge Insight (profitability structure analysis) ──
+        edge_insight = ''
+        if avg_loss != 0 and avg_win != 0:
+            # Calculate breakeven win rate for this R:R
+            breakeven_wr = (1 / (1 + rr_ratio)) * 100 if rr_ratio > 0 else 100
+            is_profitable_structure = win_rate > breakeven_wr
+
+            if rr_ratio < 0.8:
+                edge_insight = (
+                    f'Your average loss ({avg_loss:+.1f}%) is significantly larger than your average win ({avg_win:+.1f}%), '
+                    f'giving a reward-to-risk ratio of {rr_ratio:.2f}:1. '
+                    f'At this ratio, you need to win {breakeven_wr:.0f}%+ of trades just to break even. '
+                    f'Your current win rate of {win_rate:.0f}% {"meets" if is_profitable_structure else "falls short of"} this threshold.'
+                )
+            elif rr_ratio < 1.2:
+                edge_insight = (
+                    f'Wins and losses are nearly equal in size (R:R = {rr_ratio:.2f}:1), '
+                    f'so your profitability depends almost entirely on win rate. '
+                    f'At {win_rate:.0f}%, you are {"slightly profitable" if win_rate > 52 else "near breakeven" if win_rate > 48 else "likely losing money over time"}. '
+                    f'Focus on either increasing win rate above 55% OR letting winners run further.'
+                )
+            elif rr_ratio < 2.0:
+                edge_insight = (
+                    f'Decent reward-to-risk ratio of {rr_ratio:.2f}:1 – your winners are larger than losers. '
+                    f'Breakeven requires just {breakeven_wr:.0f}% accuracy, and you\'re at {win_rate:.0f}%. '
+                    f'{"This is a viable edge – protect it with consistent execution." if is_profitable_structure else "Improve entry accuracy to unlock this structural advantage."}'
+                )
+            else:
+                edge_insight = (
+                    f'Strong reward-to-risk of {rr_ratio:.2f}:1 – you let winners run. '
+                    f'Even with a {win_rate:.0f}% win rate, this structure can be profitable (breakeven at {breakeven_wr:.0f}%). '
+                    f'{"You have a quantifiable edge. Focus on consistency and position sizing." if is_profitable_structure else "Your entries need work – the R:R is excellent but accuracy is dragging you down."}'
+                )
+        elif wins and not losses:
+            edge_insight = f'All {len(wins)} trades were profitable – impressive but too few to confirm a durable edge. Keep trading to validate.'
+        elif losses and not wins:
+            edge_insight = f'All {len(losses)} trades resulted in losses. Re-evaluate your entry criteria before taking more positions.'
+        else:
+            edge_insight = 'Insufficient data to analyze profitability structure. Complete more trades for a meaningful assessment.'
+
+        # ── 9. Personalized advice ──
+        advice_lines = []
+        if 'stop-loss' in critical_pattern.lower() or 'unprotected' in critical_pattern.lower():
+            advice_lines.append(
+                'Set a stop-loss on EVERY trade before entering. '
+                'Use the stop_loss order type to automate exits at 5-10% below entry.'
+            )
+            advice_lines.append(
+                'Review your last 3 largest losses – calculate how much you would have saved with a 7% stop-loss.'
+            )
+        elif 'panic' in critical_pattern.lower():
+            advice_lines.append(
+                'Before selling during a dip, wait 15 minutes and check if the price is still dropping. '
+                'Most panic dips recover within an hour.'
+            )
+            advice_lines.append(
+                'Pre-set your exit plan using take-profit and stop-loss orders so you never sell on emotion.'
+            )
+        elif 'overtrad' in critical_pattern.lower():
+            advice_lines.append(
+                f'You are averaging {trades_per_day:.1f} trades/day. '
+                'Limit yourself to 2-3 high-conviction trades per day and journal each one.'
+            )
+            advice_lines.append(
+                'Before each trade ask: "Would I bet 10% of my portfolio on this?" If not, skip it.'
+            )
+        elif 'early' in critical_pattern.lower():
+            advice_lines.append(
+                'Wait for at least 2 confirmation signals (e.g. volume spike + support level hold) before entering.'
+            )
+            advice_lines.append(
+                'Use limit orders at planned entry prices instead of market orders to enforce discipline.'
+            )
+        elif 'win rate' in critical_pattern.lower() or 'accuracy' in critical_pattern.lower():
+            advice_lines.append(
+                'Paper-trade your next 5 ideas and only execute the ones that would have been profitable.'
+            )
+            advice_lines.append(
+                'Start with high-cap coins (BTC, ETH) to reduce picking the wrong asset.'
+            )
+        elif 'cutting winners' in critical_pattern.lower() or 'too short' in critical_pattern.lower():
+            advice_lines.append(
+                'Use trailing stop-losses to lock in partial profits while letting strong trends continue.'
+            )
+            advice_lines.append(
+                'Set take-profit targets at 2x your stop-loss distance to enforce a minimum 2:1 reward-to-risk ratio.'
+            )
+        elif 'losses are larger' in critical_pattern.lower() or 'erases' in critical_pattern.lower():
+            advice_lines.append(
+                'Size your stop-losses BEFORE entering so that max loss per trade is fixed at 5-8%. '
+                'Never move a stop-loss further away after entry.'
+            )
+            advice_lines.append(
+                'Aim for a minimum 1.5:1 reward-to-risk on every trade – if the setup doesn\'t offer it, skip the trade.'
+            )
+        elif 'variance' in critical_pattern.lower() or 'inconsistent' in critical_pattern.lower():
+            advice_lines.append(
+                'Define a specific setup you\'ll trade (e.g., breakout above resistance with volume) '
+                'and ONLY take trades that match this setup for the next 10 trades.'
+            )
+            advice_lines.append(
+                'Journal every trade with entry reason, exit reason, and what you\'d do differently. '
+                'Review weekly to spot repeating errors.'
+            )
+        else:
+            advice_lines.append(
+                'Create a written trading plan with entry rules, position sizing, and exit strategy. '
+                'Follow it mechanically for 10 trades before making any changes.'
+            )
+            advice_lines.append(
+                'Measure your expectancy: (Win% × Avg Win) – (Loss% × Avg Loss). '
+                'If negative, reduce position size and refine entries before scaling up.'
+            )
+
+        # ── 10. Next Focus (1 priority improvement) ──
+        next_focus = ''
+        if sl_rate < 30:
+            next_focus = 'Priority: Use a stop-loss on your next 5 trades without exception.'
+        elif rr_ratio < 1.0 and avg_loss != 0:
+            next_focus = 'Priority: Tighten stops or widen targets to achieve at least a 1:1 reward-to-risk ratio.'
+        elif win_rate < 45:
+            next_focus = 'Priority: Improve entry accuracy – wait for trend confirmation before buying.'
+        elif avg_win < 3 and win_rate >= 50:
+            next_focus = 'Priority: Let your next winning trade run 50% longer before taking profit.'
+        elif is_overtrading:
+            next_focus = 'Priority: Limit to max 3 trades per day for the next week.'
+        elif panic_sells > 0:
+            next_focus = 'Priority: Pre-set stop-loss and take-profit orders on every trade to eliminate emotional exits.'
+        else:
+            next_focus = 'Priority: Track your next 10 trades in a journal and compute your real expectancy.'
+
+        # ── 11. Confidence level ──
+        if n >= 10:
+            confidence = 'High'
+            confidence_reason = f'Based on {n} completed trades – patterns are statistically meaningful'
+        elif n >= 5:
+            confidence = 'Medium'
+            confidence_reason = f'Based on {n} trades – patterns are emerging but need more data to confirm'
+        else:
+            confidence = 'Low'
+            confidence_reason = f'Only {n} trades analyzed – too few for reliable behavioral conclusions'
+
+        # ── 12. Build behavior summary ──
+        summary_parts = []
+        summary_parts.append(
+            f'Across {n} completed trades, you have a {win_rate:.0f}% win rate '
+            f'with an average gain of {avg_win:+.1f}% on winners and {avg_loss:+.1f}% on losers.'
+        )
+        if sl_rate > 50:
+            summary_parts.append(f'You set stop-losses on most trades ({sl_rate:.0f}%), showing risk awareness.')
+        elif sl_rate > 0:
+            summary_parts.append(f'Stop-loss usage is inconsistent ({sl_rate:.0f}%), leaving you exposed to large drawdowns.')
+        else:
+            summary_parts.append('No stop-loss orders detected – you are trading without a safety net.')
+
+        if is_overtrading:
+            summary_parts.append(f'Your trading frequency ({trades_per_day:.1f}/day) suggests overtrading tendencies.')
+        elif rr_ratio < 1.0 and avg_loss != 0:
+            summary_parts.append(f'Your losses outweigh your wins ({rr_ratio:.2f}:1 R:R), which limits long-term profitability.')
+
+        behavior_summary = ' '.join(summary_parts[:3])
+
+        return jsonify({
+            'has_data': True,
+            'user_type': user_type,
+            'behavior_summary': behavior_summary,
+            'strengths': strengths,
+            'weaknesses': weaknesses,
+            'critical_pattern': critical_pattern,
+            'edge_insight': edge_insight,
+            'advice': advice_lines,
+            'next_focus': next_focus,
+            'confidence': confidence,
+            'confidence_reason': confidence_reason,
+            'stats': {
+                'total_trades': n,
+                'win_rate': round(win_rate, 1),
+                'avg_win': round(avg_win, 1),
+                'avg_loss': round(avg_loss, 1),
+                'sl_rate': round(sl_rate, 1),
+                'trades_per_day': round(trades_per_day, 1),
+                'rr_ratio': round(rr_ratio, 2),
+            },
+            'trades': trades[:10],
+        })
+
+    except mysql.connector.Error as err:
+        print(f"Trading coach DB error: {err}")
+        return jsonify({'error': f'Database error: {err}'}), 500
+    except Exception as ex:
+        print(f"Trading coach error: {ex}")
+        traceback.print_exc()
+        return jsonify({'error': str(ex)}), 500
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
 # ===========================================================================
 
