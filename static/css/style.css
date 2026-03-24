@@ -574,8 +574,23 @@ textarea.form-control:focus {
 /* Strict Lovable-style dashboard surface and spacing */
 .dashboard-page {
     margin-top: 0 !important;
-    max-width: 1200px;
+    max-width: 85%;
+    width: 85%;
     padding-top: 0.25rem;
+}
+
+@media (max-width: 1400px) {
+    .dashboard-page {
+        max-width: 92%;
+        width: 92%;
+    }
+}
+
+@media (max-width: 991px) {
+    .dashboard-page {
+        max-width: 100%;
+        width: 100%;
+    }
 }
 
 .dashboard-page .navbar {
@@ -917,6 +932,14 @@ textarea.form-control:focus {
 
 .live-market-page .market-trade-form .order-type-select {
     min-width: 90px;
+}
+.backtester-page {
+    padding-top: 0.25rem;
+}
+.backtester-page .backtester-embed-wrap {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
 }
 
 .live-market-page .market-trade-form .wallet-select {

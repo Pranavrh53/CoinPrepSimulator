@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash, json, send_file
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash, json, send_file, send_from_directory
 from flask_bcrypt import Bcrypt
 import mysql.connector
 import requests
@@ -191,7 +191,15 @@ def fetch_with_retry(url, retries=3, base_delay=10):
         if time.time() - timestamp < CACHE_DURATION:
             print(f"Cache hit for {url}")
             if isinstance(cached_data, (list, dict)) and cached_data:  # Validate cached data
-                return type('Response', (), {'text': json.dumps(cached_data), 'json': lambda: cached_data, 'raise_for_status': lambda: None})()
+                return type(
+                    'Response',
+                    (),
+                    {
+                        'text': json.dumps(cached_data),
+                        'json': lambda *args, **kwargs: cached_data,
+                        'raise_for_status': lambda *args, **kwargs: None,
+                    },
+                )()
             else:
                 print(f"Invalid cached data for {url}, fetching fresh data")
         else:
@@ -218,7 +226,15 @@ def fetch_with_retry(url, retries=3, base_delay=10):
                 cached_data, timestamp = api_cache[url]
                 if isinstance(cached_data, (list, dict)) and cached_data:
                     print(f"Returning expired cached response for {url}")
-                    return type('Response', (), {'text': json.dumps(cached_data), 'json': lambda: cached_data, 'raise_for_status': lambda: None})()
+                    return type(
+                        'Response',
+                        (),
+                        {
+                            'text': json.dumps(cached_data),
+                            'json': lambda *args, **kwargs: cached_data,
+                            'raise_for_status': lambda *args, **kwargs: None,
+                        },
+                    )()
             return None
     return None
 
@@ -2445,32 +2461,31 @@ def orderbook(pair):
 
 @app.route('/backtester')
 def backtester():
-    print("Backtester route accessed")
+    """Render backtester inside the existing Flask app shell."""
     try:
         if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
-            print("User not authenticated, redirecting to login")
             return redirect(url_for('login'))
-        
-        print("Fetching coins from CoinGecko API")
-        api_url = f"{COINGECKO_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false"
-        print(f"API URL: {api_url}")
-        
-        response = fetch_with_retry(api_url)
-        print(f"Response type: {type(response)}")
-        
-        if response and hasattr(response, 'json'):
-            coins = response.json()
-        else:
-            print("API fetch failed, using empty list")
-            coins = []
-        
-        print(f"Successfully retrieved {len(coins)} coins")
-        return render_template('backtester.html', coins=coins, section='backtester')
-        
+        return render_template('combined.html', section='backtester')
     except Exception as e:
         error_msg = f"Error in backtester route: {str(e)}\n\n{traceback.format_exc()}"
         print(error_msg)
-        return render_template('backtester.html', coins=[], section='backtester', error=str(e))
+        return render_template('combined.html', section='backtester', error=str(e))
+
+
+@app.route('/backtester_app/')
+@app.route('/backtester_app/<path:asset_path>')
+def backtester_app_assets(asset_path='index.html'):
+    """Serve built Lovable backtester bundle isolated from main app routes."""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+
+    dist_dir = os.path.join(app.static_folder, 'lovable_backtester')
+    requested_file = os.path.join(dist_dir, asset_path)
+
+    if os.path.isfile(requested_file):
+        return send_from_directory(dist_dir, asset_path)
+
+    return send_from_directory(dist_dir, 'index.html')
 
 @app.route('/api/backtest', methods=['POST'])
 def api_backtest():

@@ -1055,7 +1055,7 @@
         </div>
 
     {% elif section == 'dashboard' %}
-        <div class="container dashboard-page">
+        <div class="container-fluid dashboard-page px-3 px-lg-4">
             <nav class="navbar navbar-expand-lg navbar-light">
                 <a class="navbar-brand" href="#"><i class="fas fa-chart-line"></i> COINPREP</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -1081,37 +1081,11 @@
                 <div>
                     <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">DASHBOARD</h1>
                     <p class="text-muted" style="margin:0;">Welcome back, {{ user.username if user and user.username else 'Trader' }}</p>
-                    <div class="dashboard-cycle-chip" id="dashboardCycleCountdown" data-seconds="{{ next_check_seconds | default(300) }}">
-                        Next alert/price cycle in 5:00
-                    </div>
                 </div>
                 <button class="btn btn-sm btn-coach-open" id="btnOpenCoach" onclick="openCoachPanel()">
                     <i class="fas fa-robot"></i> AI COACH
                 </button>
             </div>
-
-            <script>
-                (function() {
-                    const el = document.getElementById('dashboardCycleCountdown');
-                    if (!el) return;
-
-                    const maxSeconds = Number(el.dataset.seconds || 300);
-                    let remaining = maxSeconds;
-
-                    const render = () => {
-                        const mins = Math.floor(remaining / 60);
-                        const secs = remaining % 60;
-                        el.textContent = `Next alert/price cycle in ${mins}:${String(secs).padStart(2, '0')}`;
-                    };
-
-                    render();
-                    setInterval(() => {
-                        remaining -= 1;
-                        if (remaining < 0) remaining = maxSeconds;
-                        render();
-                    }, 1000);
-                })();
-            </script>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -5725,6 +5699,86 @@
             </script>
         </div>
             
+    {% elif section == 'backtester' %}
+        <div class="container backtester-page">
+            <nav class="navbar navbar-expand-lg mb-4">
+                <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-store"></i>Market</a>
+                    <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-briefcase"></i>Portfolio</a>
+                    <a class="nav-link" href="{{ url_for('orders') }}"><i class="fas fa-shopping-cart"></i>Orders</a>
+                    <a class="nav-link" href="{{ url_for('watchlist') }}"><i class="fas fa-star"></i>Watchlist</a>
+                    <a class="nav-link" href="{{ url_for('alerts') }}"><i class="fas fa-bell"></i>Alerts</a>
+                    <a class="nav-link" href="{{ url_for('risk_quiz') }}"><i class="fas fa-shield-alt"></i>Risk</a>
+                    <a class="nav-link" href="{{ url_for('achievements') }}"><i class="fas fa-trophy"></i>Achievements</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i>Logout</a>
+                </div>
+            </nav>
+
+            {% if error %}
+                <div class="alert alert-danger">
+                    <h5>Backtester Load Error</h5>
+                    <pre style="white-space: pre-wrap; margin: 0;">{{ error }}</pre>
+                </div>
+            {% endif %}
+
+            <div class="backtester-embed-wrap">
+                <iframe
+                    id="backtesterFrame"
+                    title="Backtester"
+                    src="{{ url_for('backtester_app_assets', asset_path='backtester') }}"
+                    style="width: 100%; min-height: calc(100vh - 170px); border: 0; background: transparent; display: block; overflow: hidden;"
+                    loading="eager"
+                    referrerpolicy="no-referrer"
+                ></iframe>
+            </div>
+
+            <script>
+                (function setupBacktesterFrame() {
+                    const frame = document.getElementById('backtesterFrame');
+                    if (!frame) return;
+
+                    const resizeFrame = () => {
+                        try {
+                            const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+                            if (!doc) return;
+
+                            const html = doc.documentElement;
+                            const body = doc.body;
+
+                            if (html) {
+                                html.style.background = 'transparent';
+                                html.style.overflow = 'hidden';
+                            }
+                            if (body) {
+                                body.style.margin = '0';
+                                body.style.background = 'transparent';
+                                body.style.overflow = 'hidden';
+                            }
+
+                            const contentHeight = Math.max(
+                                body ? body.scrollHeight : 0,
+                                html ? html.scrollHeight : 0,
+                                window.innerHeight - 190,
+                            );
+                            frame.style.height = `${contentHeight + 8}px`;
+                        } catch (e) {
+                            // Same-origin guard: ignore if browser blocks access.
+                        }
+                    };
+
+                    frame.addEventListener('load', () => {
+                        resizeFrame();
+                        setTimeout(resizeFrame, 200);
+                        setTimeout(resizeFrame, 900);
+                    });
+
+                    window.addEventListener('resize', resizeFrame);
+                    setInterval(resizeFrame, 1200);
+                })();
+            </script>
+        </div>
+
     {% elif section == 'achievements' %}
         <div class="container">
             <nav class="navbar navbar-expand-lg mb-4">
