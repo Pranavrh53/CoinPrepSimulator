@@ -1064,6 +1064,7 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <div class="navbar-nav ms-auto">
                         <a class="nav-link active" href="{{ url_for('dashboard') }}"><i class="fas fa-th-large"></i> Dashboard</a>
+
                         <a class="nav-link" href="{{ url_for('live_market') }}"><i class="fas fa-store"></i> Market</a>
                         <a class="nav-link" href="{{ url_for('portfolio') }}"><i class="fas fa-briefcase"></i> Portfolio</a>
                         <a class="nav-link" href="{{ url_for('orders') }}"><i class="fas fa-list-ul"></i> Orders</a>
@@ -1376,9 +1377,150 @@
                 </div><!-- /.coach-panel-body -->
             </div><!-- /.coach-panel -->
 
+            <button
+                type="button"
+                class="coach-fab"
+                id="btnCoachFab"
+                onclick="toggleTutorBot(true)"
+                title="Open AI Tutor"
+                aria-label="Open AI Tutor"
+            >
+                <i class="fas fa-robot"></i>
+            </button>
+
+            <div class="tutor-bot-panel" id="tutorBotPanel" aria-live="polite">
+                <div class="tutor-bot-header">
+                    <div class="tutor-bot-title"><i class="fas fa-robot"></i> AI TUTOR BOT</div>
+                    <button type="button" class="tutor-bot-close" onclick="toggleTutorBot(false)" aria-label="Close chatbot">&times;</button>
+                </div>
+
+                <div class="tutor-bot-messages" id="tutorBotMessages">
+                    <div class="tutor-bot-message assistant">Hi! I am your AI tutor. Ask me about risk management, stop-loss, FOMO, or your recent trade mistakes.</div>
+                </div>
+
+                <div class="tutor-bot-typing" id="tutorBotTyping" style="display:none;">Typing...</div>
+                <div class="tutor-bot-error" id="tutorBotError"></div>
+
+                <div class="tutor-bot-suggestions">
+                    <button type="button" class="tutor-bot-chip" onclick="sendTutorSuggestion('How do I use stop loss correctly?')">Stop Loss</button>
+                    <button type="button" class="tutor-bot-chip" onclick="sendTutorSuggestion('Why did my last trade fail?')">Trade Review</button>
+                    <button type="button" class="tutor-bot-chip" onclick="sendTutorSuggestion('How can I avoid FOMO entries?')">Avoid FOMO</button>
+                    <button type="button" class="tutor-bot-chip" onclick="sendTutorSuggestion('What risk per trade should I use as a beginner?')">Position Sizing</button>
+                </div>
+
+                <div class="tutor-bot-input-row">
+                    <input
+                        type="text"
+                        id="tutorBotInput"
+                        class="tutor-bot-input"
+                        maxlength="500"
+                        placeholder="Ask your trading question..."
+                        onkeydown="if (event.key === 'Enter') { event.preventDefault(); sendTutorMessage(); }"
+                    >
+                    <button type="button" id="tutorBotSend" class="tutor-bot-send" onclick="sendTutorMessage()">SEND</button>
+                </div>
+            </div>
+
             <script>
             // Store latest coach data for download
             let _lastCoachData = null;
+            const tutorBotSessionId = `dashboard_bot_${Date.now()}`;
+            let tutorBotLoading = false;
+
+            function toggleTutorBot(forceOpen) {
+                const panel = document.getElementById('tutorBotPanel');
+                const openState = typeof forceOpen === 'boolean' ? forceOpen : !panel.classList.contains('open');
+
+                panel.classList.toggle('open', openState);
+                if (openState) {
+                    const input = document.getElementById('tutorBotInput');
+                    if (input) input.focus();
+                    scrollTutorBotToBottom();
+                }
+            }
+
+            function escapeTutorHtml(text) {
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function addTutorMessage(role, text) {
+                const messages = document.getElementById('tutorBotMessages');
+                const messageEl = document.createElement('div');
+                messageEl.className = `tutor-bot-message ${role}`;
+                messageEl.innerHTML = escapeTutorHtml(text);
+                messages.appendChild(messageEl);
+                scrollTutorBotToBottom();
+            }
+
+            function scrollTutorBotToBottom() {
+                const messages = document.getElementById('tutorBotMessages');
+                if (messages) {
+                    messages.scrollTop = messages.scrollHeight;
+                }
+            }
+
+            function sendTutorSuggestion(text) {
+                const input = document.getElementById('tutorBotInput');
+                if (input) input.value = text;
+                sendTutorMessage();
+            }
+
+            async function sendTutorMessage() {
+                if (tutorBotLoading) return;
+
+                const input = document.getElementById('tutorBotInput');
+                const sendBtn = document.getElementById('tutorBotSend');
+                const typingEl = document.getElementById('tutorBotTyping');
+                const errorEl = document.getElementById('tutorBotError');
+
+                const question = (input.value || '').trim();
+                if (!question) return;
+
+                errorEl.textContent = '';
+                addTutorMessage('user', question);
+                input.value = '';
+
+                tutorBotLoading = true;
+                sendBtn.disabled = true;
+                typingEl.style.display = 'block';
+
+                try {
+                    const response = await fetch('/learning/api/ask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ question, session_id: tutorBotSessionId })
+                    });
+
+                    const rawText = await response.text();
+                    let data = null;
+                    try {
+                        data = JSON.parse(rawText);
+                    } catch (parseError) {
+                        const statusLabel = response.status ? `HTTP ${response.status}` : 'Unknown error';
+                        throw new Error(`AI tutor endpoint returned invalid JSON (${statusLabel}).`);
+                    }
+
+                    if (!response.ok || !data || !data.success) {
+                        throw new Error((data && data.error) || 'Failed to get response from AI tutor.');
+                    }
+
+                    addTutorMessage('assistant', data.response || 'No response generated.');
+                } catch (error) {
+                    errorEl.textContent = error && error.message ? error.message : 'Unable to connect to AI tutor.';
+                } finally {
+                    tutorBotLoading = false;
+                    sendBtn.disabled = false;
+                    typingEl.style.display = 'none';
+                    input.focus();
+                }
+            }
 
             function openCoachPanel() {
                 document.getElementById('coachPanel').classList.add('open');
@@ -1394,7 +1536,10 @@
 
             // ESC key to close
             document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') closeCoachPanel();
+                if (e.key === 'Escape') {
+                    closeCoachPanel();
+                    toggleTutorBot(false);
+                }
             });
 
             function loadTradingCoach() {
@@ -2025,6 +2170,197 @@
                 })();
             </script>
         </div>
+
+        <!-- ═══ FLOATING LEARN CHATBOT ═══ -->
+        <button class="learn-fab" id="learnFab" onclick="toggleLearnChat()" title="AI Tutor">
+            <i class="fas fa-graduation-cap" id="learnFabIcon"></i>
+        </button>
+
+        <div class="learn-popup" id="learnPopup" style="display:none;">
+            <div class="learn-chat-box">
+                <!-- Header -->
+                <div class="learn-chat-header">
+                    <i class="fas fa-robot" style="color:var(--neon-green);"></i>
+                    <span class="learn-chat-title">AI TUTOR</span>
+                    <span class="learn-online-badge">
+                        <span class="learn-online-dot"></span>Online
+                    </span>
+                    <button class="learn-close-btn" onclick="toggleLearnChat()"><i class="fas fa-times"></i></button>
+                </div>
+
+                <!-- Messages -->
+                <div class="learn-messages" id="learnMessages">
+                    <div class="learn-welcome" id="learnWelcome">
+                        <div class="learn-welcome-icon">✦</div>
+                        <p class="learn-welcome-title">AI Trading Tutor</p>
+                        <p class="learn-welcome-sub">Ask anything about crypto trading!</p>
+                        <div class="learn-topics-inline">
+                            <button class="learn-chip" onclick="sendLearnMessage('How do I read candlestick charts?')">📊 Candlestick charts</button>
+                            <button class="learn-chip" onclick="sendLearnMessage('Explain stop-loss orders')">🛑 Stop-losses</button>
+                            <button class="learn-chip" onclick="sendLearnMessage('What is RSI and how to use it?')">⚡ RSI explained</button>
+                            <button class="learn-chip" onclick="sendLearnMessage('How do I calculate position size?')">🎯 Position sizing</button>
+                            <button class="learn-chip" onclick="sendLearnMessage('What is risk-reward ratio?')">💰 Risk-Reward</button>
+                            <button class="learn-chip" onclick="sendLearnMessage('Common beginner mistakes?')">🚫 Mistakes</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input -->
+                <div class="learn-input-area">
+                    <div class="learn-input-wrap">
+                        <input type="text" id="learnInput" class="learn-input"
+                            placeholder="Ask about trading..."
+                            onkeydown="if(event.key==='Enter')sendLearnMessage()" />
+                        <button class="learn-send-btn" id="learnSendBtn" onclick="sendLearnMessage()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function() {
+            let learnMessages = [];
+            let learnLoading = false;
+
+            function getUserContext() {
+                return {
+                    username: '{{ user.username if user else "Trader" }}',
+                    cryptoBucks: '{{ user.crypto_bucks if user else 0 }}',
+                    tetherBalance: '{{ user.tether_balance if user else 0 }}',
+                    riskTolerance: '{{ user.risk_tolerance if user else "Not set" }}',
+                };
+            }
+
+            function renderMarkdown(text) {
+                const lines = text.split('\n');
+                let html = '';
+                for (const line of lines) {
+                    let l = line
+                        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/`(.+?)`/g, '<code style="background:rgba(0,245,160,0.1);color:var(--neon-cyan);padding:1px 4px;border-radius:0;font-size:0.8em;">$1</code>');
+                    if (l.startsWith('### ')) {
+                        html += `<h4 style="font-family:var(--pixel-font);font-size:0.48rem;color:var(--neon-green);margin:8px 0 3px;">${l.slice(4)}</h4>`;
+                    } else if (l.startsWith('## ')) {
+                        html += `<h3 style="font-family:var(--pixel-font);font-size:0.52rem;color:var(--neon-green);margin:8px 0 3px;">${l.slice(3)}</h3>`;
+                    } else if (l.startsWith('- ') || l.startsWith('* ')) {
+                        html += `<div style="display:flex;gap:6px;margin:2px 0 2px 6px;"><span style="color:var(--neon-green);flex-shrink:0;">▸</span><span>${l.slice(2)}</span></div>`;
+                    } else if (/^\d+[\.\)]/.test(l)) {
+                        const m = l.match(/^(\d+)[\.\)] (.*)/);
+                        if (m) html += `<div style="display:flex;gap:6px;margin:2px 0 2px 6px;"><span style="color:var(--neon-cyan);flex-shrink:0;font-family:var(--pixel-font);font-size:0.55em;">${m[1]}.</span><span>${m[2]}</span></div>`;
+                    } else if (l.trim() === '') {
+                        html += '<div style="height:4px;"></div>';
+                    } else {
+                        html += `<p style="margin:2px 0;">${l}</p>`;
+                    }
+                }
+                return html;
+            }
+
+            function appendMessage(role, content, isStreaming) {
+                const messagesDiv = document.getElementById('learnMessages');
+                const welcome = document.getElementById('learnWelcome');
+                if (welcome) welcome.style.display = 'none';
+                const id = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                if (role === 'user') {
+                    const div = document.createElement('div');
+                    div.className = 'learn-msg learn-msg-user';
+                    div.innerHTML = `<div class="learn-msg-bubble learn-msg-bubble-user"><p style="font-size:0.74rem;margin:0;">${content}</p></div><div class="learn-avatar learn-avatar-user"><i class="fas fa-user" style="font-size:0.55rem;"></i></div>`;
+                    messagesDiv.appendChild(div);
+                } else {
+                    const div = document.createElement('div');
+                    div.className = 'learn-msg learn-msg-bot';
+                    div.id = id;
+                    div.innerHTML = `<div class="learn-avatar learn-avatar-bot"><i class="fas fa-robot" style="font-size:0.55rem;"></i></div><div class="learn-msg-bubble learn-msg-bubble-bot" id="bubble-${id}">${isStreaming ? '<span class="learn-typing-dots"><span></span><span></span><span></span></span>' : renderMarkdown(content)}</div>`;
+                    messagesDiv.appendChild(div);
+                }
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                return id;
+            }
+
+            function updateBubble(id, text) {
+                const bubble = document.getElementById('bubble-' + id);
+                if (bubble) {
+                    bubble.innerHTML = renderMarkdown(text);
+                    document.getElementById('learnMessages').scrollTop = 999999;
+                }
+            }
+
+            window.toggleLearnChat = function() {
+                const popup = document.getElementById('learnPopup');
+                const fab = document.getElementById('learnFab');
+                const icon = document.getElementById('learnFabIcon');
+                const open = popup.style.display === 'none';
+                popup.style.display = open ? 'flex' : 'none';
+                icon.className = open ? 'fas fa-times' : 'fas fa-graduation-cap';
+                fab.classList.toggle('learn-fab-active', open);
+                if (open) document.getElementById('learnInput').focus();
+            };
+
+            window.sendLearnMessage = async function(text) {
+                const input = document.getElementById('learnInput');
+                const btn = document.getElementById('learnSendBtn');
+                const msg = (text || input.value).trim();
+                if (!msg || learnLoading) return;
+                // Make sure chat is open
+                const popup = document.getElementById('learnPopup');
+                if (popup.style.display === 'none') toggleLearnChat();
+
+                learnLoading = true;
+                input.disabled = true;
+                btn.disabled = true;
+                input.value = '';
+                learnMessages.push({ role: 'user', content: msg });
+                appendMessage('user', msg);
+                const botId = appendMessage('assistant', '', true);
+                let assistantText = '';
+                try {
+                    const resp = await fetch('/api/ai-tutor', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ messages: learnMessages, userContext: getUserContext() })
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({ error: 'Unknown error' }));
+                        updateBubble(botId, '⚠ ' + (err.error || 'Error connecting to AI tutor.'));
+                        return;
+                    }
+                    const reader = resp.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        let idx;
+                        while ((idx = buffer.indexOf('\n')) !== -1) {
+                            let line = buffer.slice(0, idx);
+                            buffer = buffer.slice(idx + 1);
+                            if (line.endsWith('\r')) line = line.slice(0, -1);
+                            if (!line.startsWith('data: ')) continue;
+                            const json = line.slice(6).trim();
+                            if (json === '[DONE]') break;
+                            try {
+                                const parsed = JSON.parse(json);
+                                const chunk = parsed.choices?.[0]?.delta?.content;
+                                if (chunk) { assistantText += chunk; updateBubble(botId, assistantText); }
+                                if (parsed.error) { updateBubble(botId, '⚠ ' + parsed.error); }
+                            } catch(e) {}
+                        }
+                    }
+                    learnMessages.push({ role: 'assistant', content: assistantText });
+                } catch(err) {
+                    updateBubble(botId, '⚠ Failed to connect. Please try again.');
+                } finally {
+                    learnLoading = false;
+                    input.disabled = false;
+                    btn.disabled = false;
+                    input.focus();
+                }
+            };
+        })();
+        </script>
 
     {% elif section == 'live_market' %}
         <div class="container live-market-page">

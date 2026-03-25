@@ -3393,9 +3393,305 @@ def trading_coach_api():
             conn.close()
 
 # ===========================================================================
+# LEARN PAGE — RAG AI Tutor
+# ===========================================================================
+
+@app.route('/learn')
+def learn():
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return redirect(url_for('login'))
+    conn = get_db_connection()
+    user = None
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM users WHERE id = %s", (session['user_id'],))
+            user = cursor.fetchone()
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    return render_template('combined.html', section='learn', user=user)
+
+
+CRYPTO_KNOWLEDGE_BASE = [
+    {
+        "title": "What is Cryptocurrency?",
+        "tags": ["beginner", "crypto", "blockchain"],
+        "content": "Cryptocurrency is a digital currency using cryptography on decentralized blockchains. Key concepts: Blockchain (distributed ledger), Decentralization (no single authority), Digital wallets (store private keys), Market cap (price × supply), Volatility (10-20% daily swings possible).",
+    },
+    {
+        "title": "Reading Candlestick Charts",
+        "tags": ["charts", "candlestick", "OHLCV", "technical-analysis"],
+        "content": "Each candle shows Open, High, Low, Close for a time period. Green = close > open (up). Red = close < open (down). Body = thick part (open-close range). Wicks = thin lines (high/low). Patterns: Doji (indecision), Hammer (reversal), Engulfing (strong reversal), Morning Star (bullish reversal). Volume confirms moves.",
+    },
+    {
+        "title": "Order Types",
+        "tags": ["orders", "market-order", "limit-order", "stop-loss", "take-profit"],
+        "content": "Market Order: buy/sell immediately at best price. Pros: instant. Cons: slippage. Limit Order: execute only at specific price or better. Stop-Loss: auto-sells when price drops to level — #1 risk tool, ALWAYS use. Take-Profit: auto-sells at target price to lock gains. Stop-Limit: triggers limit order at stop price.",
+    },
+    {
+        "title": "Trading Fees and Slippage",
+        "tags": ["fees", "slippage", "spread", "costs"],
+        "content": "Fees: 0.1-0.5% per trade. Maker fees (limit) < Taker fees (market). Slippage: difference between expected and actual price. Spread: gap between bid/ask. Impact: 0.3% costs per trade means 0.6% profit needed per round trip to break even. Over many trades, fees compound significantly.",
+    },
+    {
+        "title": "Moving Average Crossover Strategy",
+        "tags": ["strategy", "moving-average", "crossover", "golden-cross"],
+        "content": "Use short MA (e.g. 50) and long MA (e.g. 200). Buy when short crosses above long (Golden Cross). Sell when short crosses below (Death Cross). SMA = equal weight, EMA = more weight on recent. Pairs: 9/21 EMA (day trading), 20/50 SMA (swing), 50/200 SMA (long-term). Works well in trends, poor in sideways markets. Combine with volume confirmation.",
+    },
+    {
+        "title": "RSI Strategy",
+        "tags": ["strategy", "RSI", "momentum", "overbought", "oversold"],
+        "content": "RSI ranges 0-100, typically 14-period. Oversold (RSI<30) = potential buy. Overbought (RSI>70) = potential sell. Divergence: price makes new high but RSI doesn't = bearish signal. Centerline: above 50 = bullish, below = bearish. Caveat: RSI can stay extreme in strong trends. Best in range-bound markets.",
+    },
+    {
+        "title": "Breakout Strategy",
+        "tags": ["strategy", "breakout", "support", "resistance"],
+        "content": "Enter when price moves beyond support/resistance with volume. Buy: close above resistance + high volume. Sell: close below support + high volume. Fakeouts are common — wait for candle close, require 2x+ volume. Set stops just beyond the broken level. Look at recent highs/lows over 20-50 candles.",
+    },
+    {
+        "title": "Mean Reversion Strategy",
+        "tags": ["strategy", "mean-reversion", "dip-buying", "bollinger"],
+        "content": "Prices tend to return to average. Buy when price drops X% (3-8%) below MA. Sell when price returns to MA. Use Bollinger Bands — buy at lower band, sell at middle. Risk: catching falling knife. Always use stop-loss. Works best in uptrends/sideways, NOT in downtrends.",
+    },
+    {
+        "title": "Position Sizing and 1-2% Rule",
+        "tags": ["risk", "position-sizing", "capital-management"],
+        "content": "Never risk more than 1-2% of capital per trade. Formula: Position Size = (Account × Risk%) / Stop-Loss%. Example: $10K account, 2% risk, 5% stop = $4,000 position. With 2% rule, 10 consecutive losses = still 80% capital left. With 10% risk, 5 losses = 50% gone. Never go all-in.",
+    },
+    {
+        "title": "Stop-Loss Strategies",
+        "tags": ["risk", "stop-loss", "protection"],
+        "content": "Types: Fixed % (e.g. 5%), Support-based, ATR-based (dynamic), Trailing (follows price up). Place below swing lows or support, NOT at round numbers. Never move stops further away. Math: 10% loss needs 11.1% to recover; 50% loss needs 100% to recover. Set stop BEFORE entering trade.",
+    },
+    {
+        "title": "Risk-Reward Ratio",
+        "tags": ["risk", "risk-reward", "R:R", "profitability"],
+        "content": "R:R = Potential Reward / Potential Risk. At 1:1 need >50% win rate. At 2:1 need >33%. At 3:1 need >25%. Minimum acceptable: 2:1. Never take trades below 1:1. Improve with better entries (pullbacks), wider targets, tighter stops. Most profitable traders have 40-50% win rate but 2:1-4:1 R:R.",
+    },
+    {
+        "title": "Portfolio Diversification",
+        "tags": ["risk", "diversification", "portfolio", "allocation"],
+        "content": "Spread capital across assets. By market cap, sector, strategy. Suggested: 40-50% BTC+ETH, 20-30% established alts, 10-20% small caps, 10-20% stablecoins. Sweet spot: 5-8 positions. Beware correlation — most alts move with BTC.",
+    },
+    {
+        "title": "Support and Resistance",
+        "tags": ["technical-analysis", "support", "resistance"],
+        "content": "Support = price floor (buying pressure). Resistance = ceiling (selling pressure). More bounces = stronger level. Broken support becomes resistance (role reversal). Identify via: multiple reversals, round numbers, previous highs/lows. S/R are zones, not exact prices.",
+    },
+    {
+        "title": "Volume Analysis",
+        "tags": ["technical-analysis", "volume", "confirmation"],
+        "content": "Volume = units traded per period. Rising price + rising volume = strong uptrend. Rising price + falling volume = weak (potential reversal). Volume spikes = significant events. Breakouts need 2x+ average volume. Low volume pullbacks = healthy corrections.",
+    },
+    {
+        "title": "Trading Psychology and Emotions",
+        "tags": ["psychology", "emotions", "FOMO", "discipline"],
+        "content": "Emotions are #1 reason traders lose. FOMO: buying at tops. Fear: panic selling dips. Greed: not taking profits. Revenge trading: bigger bets after losses. Solutions: plan before trading, use backtester, take breaks after 3 losses, journal trades, stick to rules. Process over outcome.",
+    },
+    {
+        "title": "Common Beginner Mistakes",
+        "tags": ["psychology", "mistakes", "beginner"],
+        "content": "1) No stop-losses. 2) No trading plan. 3) Overtrading (fees compound). 4) Chasing pumps. 5) Ignoring fees. 6) No research. 7) Leverage too early. 8) Trading money you can't afford to lose. 9) No risk management. 10) Comparing to others highlight reels. CoinPrep lets you make these mistakes with VIRTUAL money.",
+    },
+    {
+        "title": "Using CoinPrep Dashboard",
+        "tags": ["app", "dashboard", "guide"],
+        "content": "Stats: CryptoBucks (virtual currency), USDT balance, Risk Tolerance (from quiz), Active Alerts. Price Alerts section shows triggered alerts with TRADE button. Market Overview table has top coins with price/24h/cap. Archived Trades shows completed trades with P/L. AI Coach (side drawer) analyzes your trading behavior.",
+    },
+    {
+        "title": "Using CoinPrep Backtester",
+        "tags": ["app", "backtester", "guide"],
+        "content": "1) Select coin. 2) Pick strategy (MA Crossover, RSI, Breakout, Mean Reversion). 3) Set parameters. 4) Configure risk (capital, position size, fees, slippage, stop-loss, take-profit). 5) Run. Results: Total Return, Win Rate, Sharpe Ratio (>1 good, >2 excellent), Max Drawdown, R:R Ratio. Equity curve shows capital over time.",
+    },
+    {
+        "title": "Using CoinPrep Alerts",
+        "tags": ["app", "alerts", "guide"],
+        "content": "Create alert: select coin → condition (above/below) → target price → save. Set alerts at support/resistance levels, desired buy prices, profit targets, breakout levels. Pro tip: set alerts BEFORE levels are reached to plan trades calmly.",
+    },
+    {
+        "title": "CoinPrep Risk Quiz",
+        "tags": ["app", "risk-quiz", "guide"],
+        "content": "Determines risk tolerance: Conservative (large-caps, smaller positions), Moderate (balanced), Aggressive (more altcoins, still use stop-losses). Risk tolerance guides position sizing and strategy selection. Retake periodically as experience grows.",
+    },
+]
+
+
+def _rag_retrieve(query, top_k=5):
+    """Simple keyword-scored RAG retrieval from the knowledge base."""
+    words = [w for w in query.lower().split() if len(w) > 2]
+    scored = []
+    for entry in CRYPTO_KNOWLEDGE_BASE:
+        score = 0
+        text = f"{entry['title']} {entry['content']} {' '.join(entry['tags'])}".lower()
+        for w in words:
+            if w in text:
+                score += 1
+            if w in entry['title'].lower():
+                score += 3
+            if any(w in t for t in entry['tags']):
+                score += 2
+        scored.append((score, entry))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = [e for s, e in scored if s > 0][:top_k]
+    if not top:
+        top = [e for _, e in scored[:3]]
+    return "\n\n".join(f"### {e['title']}\n{e['content']}" for e in top)
+
+
+@app.route('/api/ai-tutor', methods=['POST'])
+def ai_tutor_chat():
+    """RAG-powered AI tutor endpoint — streams Gemini responses."""
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        payload = request.get_json(force=True)
+        messages = payload.get('messages', [])
+        user_context = payload.get('userContext', {})
+
+        # Retrieve RAG context from most recent user message
+        last_user = next((m['content'] for m in reversed(messages) if m.get('role') == 'user'), '')
+        rag_context = _rag_retrieve(last_user)
+
+        personal_ctx = ""
+        if user_context:
+            personal_ctx = f"""
+CURRENT USER CONTEXT:
+- Username: {user_context.get('username', 'Unknown')}
+- CryptoBucks Balance: ${user_context.get('cryptoBucks', 0)}
+- USDT Balance: ${user_context.get('tetherBalance', 0)}
+- Risk Tolerance: {user_context.get('riskTolerance', 'Not set')}
+- Portfolio: {user_context.get('portfolio', 'No holdings')}
+- Recent Trades: {user_context.get('recentTrades', 'No recent trades')}
+"""
+
+        system_prompt = f"""You are the CoinPrep AI Tutor — a friendly, knowledgeable crypto trading educator built into a trading simulator app.
+
+YOUR ROLE:
+- Teach users about cryptocurrency trading concepts clearly and practically
+- Reference the user's actual portfolio, balance, and trading data when giving personalized advice
+- Explain CoinPrep app features when asked
+- Always emphasize risk management and responsible trading
+- Keep responses focused and actionable
+- Use examples with real numbers when possible
+- Format responses with markdown (headers, bold, bullet points) for readability
+
+PERSONALITY:
+- Encouraging but honest — never hype or promise profits
+- Patient with beginners — explain jargon when first used
+- Pixel/retro gaming vibe fits the app
+- Direct and concise — no filler paragraphs
+
+IMPORTANT RULES:
+- NEVER recommend specific coins to buy or give financial advice
+- Always remind users this is a SIMULATOR for learning
+- Emphasize that past performance doesn't guarantee future results
+- When discussing strategies, always mention their limitations
+- If unsure about something, say so honestly
+
+{personal_ctx}
+
+RELEVANT KNOWLEDGE BASE CONTEXT:
+{rag_context}
+
+Use the knowledge base context above to inform your answers. If the user asks something not covered, provide your best educational response while noting it's general information."""
+
+        api_key = os.environ.get('GEMINI_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'AI service not configured'}), 500
+
+        # Capture for closure
+        _system_prompt = system_prompt
+        _messages = messages
+        _last_user = last_user
+
+        def generate_stream():
+            import json as _json
+            try:
+                from google import genai as _gai
+                client = _gai.Client(api_key=api_key)
+
+                # Build single prompt: system context + full conversation history
+                conv_parts = [_system_prompt, '']
+                for msg in _messages:
+                    prefix = 'User' if msg['role'] == 'user' else 'Assistant'
+                    conv_parts.append(f"{prefix}: {msg['content']}")
+                conv_parts.append('Assistant:')
+                full_prompt = '\n'.join(conv_parts)
+
+                # Try model candidates — gemini-3-flash-preview is the current working model
+                candidate_models = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash']
+                env_model = os.environ.get('GEMINI_MODEL', '').strip()
+                if env_model:
+                    candidate_models.insert(0, env_model)
+
+                import time as _time
+                text = None
+                last_error = None
+                for model_name in candidate_models:
+                    for attempt in range(2):  # retry once per model
+                        try:
+                            response = client.models.generate_content(
+                                model=model_name,
+                                contents=full_prompt,
+                                config={'temperature': 0.7, 'max_output_tokens': 1024}
+                            )
+                            text = getattr(response, 'text', None) or str(response)
+                            break
+                        except Exception as me:
+                            last_error = me
+                            err_str = str(me).lower()
+                            if '429' in err_str or 'resource_exhausted' in err_str or 'quota' in err_str:
+                                if attempt == 0:
+                                    _time.sleep(10)  # wait for quota reset
+                                    continue
+                                break  # already retried, try next model
+                            if '503' in err_str or 'unavailable' in err_str or 'overloaded' in err_str:
+                                _time.sleep(2)
+                                continue
+                            break  # non-retryable error, try next model
+                    if text:
+                        break
+
+                if text:
+                    # Simulate typewriter streaming — send 8 words at a time
+                    words = text.split(' ')
+                    chunk_size = 8
+                    for i in range(0, len(words), chunk_size):
+                        piece = ' '.join(words[i:i + chunk_size])
+                        if i + chunk_size < len(words):
+                            piece += ' '
+                        data = _json.dumps({'choices': [{'delta': {'content': piece}}]})
+                        yield f'data: {data}\n\n'
+                else:
+                    err_str = str(last_error).lower() if last_error else ''
+                    if '429' in err_str or 'quota' in err_str or 'resource_exhausted' in err_str:
+                        friendly = 'API rate limit reached. Please wait a minute and try again.'
+                    else:
+                        friendly = str(last_error) if last_error else 'No response from AI'
+                    yield f'data: {_json.dumps({"error": friendly})}\n\n'
+
+            except Exception as e:
+                import json as _json2
+                yield f'data: {_json2.dumps({"error": str(e)})}\n\n'
+            finally:
+                yield 'data: [DONE]\n\n'
+
+        from flask import Response as FlaskResponse
+        return FlaskResponse(generate_stream(), mimetype='text/event-stream',
+                             headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ===========================================================================
 
 if __name__ == '__main__':
     try:
-        app.run(debug=True)
+        app.run(debug=True, use_reloader=True)
     except (KeyboardInterrupt, SystemExit):
         scheduler.shutdown()
