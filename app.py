@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash, json, send_file, send_from_directory
 from flask_bcrypt import Bcrypt
+from flask_cors import CORS
 import mysql.connector
 import requests
 import json
@@ -61,6 +62,20 @@ _load_local_env_file()
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 bcrypt = Bcrypt(app)
+
+# Allow the Lovable/Vite frontend (different port) to call Flask API endpoints.
+# credentials=True is required so the browser sends the Flask session cookie.
+CORS(
+    app,
+    resources={r"/api/*": {"origins": [
+        "http://localhost:5173",   # Vite dev server (default)
+        "http://localhost:8080",   # Alternative Vite port
+        "http://localhost:3000",   # CRA / other dev server
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8080",
+    ]}},
+    supports_credentials=True,
+)
 
 # Email Configuration
 EMAIL_CONFIG = {
@@ -902,160 +917,237 @@ def verify(email):
 def risk_quiz():
     if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
         return redirect(url_for('login'))
-    
-    questions = [
-        {
-            'id': 'q1',
-            'text': 'How would you react to a 20% drop in your portfolio value in a month?',
-            'explanation': 'This question helps determine your emotional response to market volatility.',
-            'options': [
-                {'value': 1, 'text': 'Sell all investments immediately', 'explanation': 'Suggests low risk tolerance and potential panic selling during downturns.'},
-                {'value': 2, 'text': 'Sell some to reduce risk', 'explanation': 'Indicates a cautious approach to risk management.'},
-                {'value': 3, 'text': 'Hold and wait for recovery', 'explanation': 'Shows a balanced approach to market fluctuations.'},
-                {'value': 4, 'text': 'Buy more to lower cost', 'explanation': 'Suggests a contrarian investment strategy and higher risk tolerance.'},
-                {'value': 5, 'text': 'Significantly increase position', 'explanation': 'Indicates high risk tolerance and strong belief in long-term growth.'}
-            ]
+
+    blueprint = {
+        'financial': {
+            'label': 'Financial Capacity',
+            'test': FINANCIAL_CAPACITY_TEST,
+            'questions': FINANCIAL_CAPACITY_TEST['questions'][:5],
         },
-        {
-            'id': 'q2',
-            'text': 'What is your investment time horizon?',
-            'explanation': 'Your investment horizon affects your ability to handle market volatility.',
-            'options': [
-                {'value': 1, 'text': 'Less than 1 year', 'explanation': 'Short-term horizons require more conservative investments.'},
-                {'value': 3, 'text': '1-3 years', 'explanation': 'Medium-term goals can handle some volatility.'},
-                {'value': 5, 'text': '3-5 years', 'explanation': 'Allows for a balanced approach between growth and stability.'},
-                {'value': 8, 'text': '5-10 years', 'explanation': 'Longer timeframes can accommodate more growth-oriented investments.'},
-                {'value': 10, 'text': '10+ years', 'explanation': 'Extended horizons can weather significant market cycles.'}
-            ]
+        'knowledge': {
+            'label': 'Investment Knowledge',
+            'test': INVESTMENT_KNOWLEDGE_TEST,
+            'questions': INVESTMENT_KNOWLEDGE_TEST['questions'][:5],
         },
-        {
-            'id': 'q3',
-            'text': 'What percentage of your income do you invest?',
-            'explanation': 'This helps assess your capacity for risk based on your investment rate.',
-            'options': [
-                {'value': 1, 'text': 'Less than 5%', 'explanation': 'Conservative approach to investing.'},
-                {'value': 3, 'text': '5-10%', 'explanation': 'Moderate investment rate with room for growth.'},
-                {'value': 5, 'text': '10-20%', 'explanation': 'Aggressive saving and investing strategy.'},
-                {'value': 7, 'text': '20-30%', 'explanation': 'Highly committed to building wealth through investments.'},
-                {'value': 10, 'text': 'More than 30%', 'explanation': 'Maximum commitment to long-term wealth building.'}
-            ]
+        'psychological': {
+            'label': 'Psychological Tolerance',
+            'test': PSYCHOLOGICAL_TOLERANCE_TEST,
+            'questions': PSYCHOLOGICAL_TOLERANCE_TEST['questions'][:5],
         },
-        {
-            'id': 'q4',
-            'text': 'Your investment knowledge level?',
-            'explanation': 'Understanding investments helps in making informed decisions during market fluctuations.',
-            'options': [
-                {'value': 1, 'text': 'Beginner', 'explanation': 'New to investing, still learning the basics.'},
-                {'value': 3, 'text': 'Some knowledge', 'explanation': 'Familiar with basic investment concepts.'},
-                {'value': 5, 'text': 'Experienced', 'explanation': 'Comfortable with most investment vehicles and strategies.'},
-                {'value': 7, 'text': 'Advanced', 'explanation': 'Knowledgeable about complex investment strategies.'},
-                {'value': 10, 'text': 'Expert', 'explanation': 'Extensive experience with all aspects of investing.'}
-            ]
+        'goals': {
+            'label': 'Goals & Timeline',
+            'test': GOALS_TIMELINE_TEST,
+            'questions': GOALS_TIMELINE_TEST['questions'][:5],
         },
-        {
-            'id': 'q5',
-            'text': 'Your main investment goal?',
-            'explanation': 'Different goals require different investment approaches.',
-            'options': [
-                {'value': 1, 'text': 'Preserve capital', 'explanation': 'Focus on protecting your initial investment.'},
-                {'value': 3, 'text': 'Generate income', 'explanation': 'Focus on regular income generation.'},
-                {'value': 5, 'text': 'Balanced growth', 'explanation': 'Mix of income and capital appreciation.'},
-                {'value': 8, 'text': 'Long-term growth', 'explanation': 'Focus on capital appreciation over time.'},
-                {'value': 10, 'text': 'Maximum returns', 'explanation': 'Pursue highest possible returns, accepting higher risk.'}
-            ]
-        }
-    ]
+    }
+
+    questions = []
+    for dim_key, cfg in blueprint.items():
+        for q in cfg['questions']:
+            normalized_options = []
+            for opt in q['options']:
+                normalized_options.append({
+                    'value': int(opt['points']),
+                    'text': opt['text'],
+                    'explanation': f"Risk impact score: {int(opt['points'])}/10"
+                })
+
+            questions.append({
+                'id': q['id'],
+                'text': q['text'],
+                'dimension': cfg['label'],
+                'explanation': f"{cfg['label']} - {q.get('category', 'Assessment')}",
+                'options': normalized_options
+            })
+
+    def _category_from_score(total_score):
+        for category in RISK_CATEGORIES:
+            low, high = category['range']
+            if low <= total_score < high:
+                return category
+        return RISK_CATEGORIES[-1]
+
+    def _dimension_score_for(dim_questions, response_map):
+        max_points = sum(max(int(o['points']) for o in q['options']) for q in dim_questions)
+        earned_points = sum(int(response_map.get(q['id'], 0)) for q in dim_questions)
+        if max_points <= 0:
+            return 0.0
+        return round((earned_points / max_points) * 100, 2)
     
     if request.method == 'POST':
         try:
-            # Calculate total score (max 45 points)
-            score = sum(int(request.form.get(question['id'], 0)) for question in questions)
-            
-            # Determine risk level and recommendations
-            if score <= 10:
-                risk_level = 'Conservative (1/5)'
-                risk_percent = 20
-                recommendation = '''
-                <h4>Recommended Strategy:</h4>
-                <ul>
-                    <li>Focus on capital preservation with low-volatility assets</li>
-                    <li>Consider high-quality bonds and stable dividend stocks</li>
-                    <li>Maintain higher cash positions</li>
-                    <li>Consider index funds with low volatility</li>
-                </ul>
-                '''
-            elif score <= 20:
-                risk_level = 'Moderately Conservative (2/5)'
-                risk_percent = 40
-                recommendation = '''
-                <h4>Recommended Strategy:</h4>
-                <ul>
-                    <li>Balanced approach with income-generating assets</li>
-                    <li>Consider a mix of bonds and blue-chip stocks</li>
-                    <li>Diversify across sectors and asset classes</li>
-                    <li>Consider target-date or balanced mutual funds</li>
-                </ul>
-                '''
-            elif score <= 30:
-                risk_level = 'Balanced (3/5)'
-                risk_percent = 60
-                recommendation = '''
-                <h4>Recommended Strategy:</h4>
-                <ul>
-                    <li>Equal balance of growth and income investments</li>
-                    <li>Mix of stocks and bonds based on your time horizon</li>
-                    <li>Consider index funds and ETFs for broad market exposure</li>
-                    <li>Rebalance portfolio annually</li>
-                </ul>
-                '''
-            elif score <= 38:
-                risk_level = 'Growth-Oriented (4/5)'
-                risk_percent = 80
-                recommendation = '''
-                <h4>Recommended Strategy:</h4>
-                <ul>
-                    <li>Focus on long-term capital appreciation</li>
-                    <li>Higher allocation to stocks, particularly growth stocks</li>
-                    <li>Consider sector-specific ETFs or thematic investments</li>
-                    <li>Include some international exposure</li>
-                </ul>
-                '''
-            else:
-                risk_level = 'Aggressive (5/5)'
-                risk_percent = 100
-                recommendation = '''
-                <h4>Recommended Strategy:</h4>
-                <ul>
-                    <li>Maximum growth potential with high-risk assets</li>
-                    <li>Significant allocation to growth stocks and alternative investments</li>
-                    <li>Consider small-cap, emerging markets, and sector-specific funds</li>
-                    <li>Be prepared for significant short-term volatility</li>
-                </ul>
-                '''
-            
-            # Update database
+            responses = {}
+            for question in questions:
+                raw_value = request.form.get(question['id'])
+                if raw_value is None:
+                    raise ValueError("Missing response")
+                responses[question['id']] = int(raw_value)
+
+            financial_score = _dimension_score_for(blueprint['financial']['questions'], responses)
+            knowledge_score = _dimension_score_for(blueprint['knowledge']['questions'], responses)
+            psychological_score = _dimension_score_for(blueprint['psychological']['questions'], responses)
+            goals_score = _dimension_score_for(blueprint['goals']['questions'], responses)
+
+            total_score = round(
+                financial_score * blueprint['financial']['test']['weight'] +
+                knowledge_score * blueprint['knowledge']['test']['weight'] +
+                psychological_score * blueprint['psychological']['test']['weight'] +
+                goals_score * blueprint['goals']['test']['weight'],
+                2
+            )
+
+            category = _category_from_score(total_score)
+            risk_percent = int(round(total_score))
+
+            allocation_lines = ''.join(
+                f"<li><strong>{asset}:</strong> {allocation}</li>"
+                for asset, allocation in category['allocation'].items()
+            )
+            recommendation = f"""
+            <h4>Recommended Strategy:</h4>
+            <p>{category['recommendation']}</p>
+            <h5>Target Allocation</h5>
+            <ul>
+                {allocation_lines}
+                <li><strong>Crypto:</strong> {category['crypto_allocation']}</li>
+            </ul>
+            """
+
+            dimension_scores = {
+                'financial': financial_score,
+                'knowledge': knowledge_score,
+                'psychological': psychological_score,
+                'goals': goals_score,
+            }
+
+            strengths = [
+                name for name, score in [
+                    ('Financial Capacity', financial_score),
+                    ('Investment Knowledge', knowledge_score),
+                    ('Psychological Tolerance', psychological_score),
+                    ('Goals & Timeline', goals_score),
+                ] if score >= 70
+            ]
+            weak_areas = [
+                name for name, score in [
+                    ('Financial Capacity', financial_score),
+                    ('Investment Knowledge', knowledge_score),
+                    ('Psychological Tolerance', psychological_score),
+                    ('Goals & Timeline', goals_score),
+                ] if score < 50
+            ]
+
+            ai_analysis = {
+                'summary': (
+                    f"Comprehensive risk assessment completed. Overall profile: {category['level']} "
+                    f"({total_score}%)."
+                ),
+                'strengths': strengths,
+                'concerns': weak_areas,
+                'recommendations': [
+                    category['recommendation'],
+                    f"Keep crypto exposure within {category['crypto_allocation']} of your total portfolio.",
+                    "Re-run this assessment monthly to track risk understanding improvements.",
+                ],
+                'asset_allocation': category['allocation'],
+                'crypto_advice': (
+                    f"Maintain disciplined crypto sizing around {category['crypto_allocation']} "
+                    "with strict stop-loss and position-size rules."
+                ),
+                'action_steps': [
+                    "Document entry, stop, and target before every trade.",
+                    "Review your last 10 trades and classify mistakes weekly.",
+                    "Use smaller size until your weakest risk dimension improves above 60%.",
+                ],
+                'risk_management': [
+                    "Set max risk per trade to 1-2% of account value.",
+                    "Avoid increasing risk after losses.",
+                    "Track win rate and average R-multiple every week.",
+                ],
+                'dimension_scores': dimension_scores,
+            }
+
             conn = get_db_connection()
             if conn:
                 try:
                     cursor = conn.cursor()
+
+                    # Ensure comprehensive risk table exists.
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS risk_assessments (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            user_id INT NOT NULL,
+                            financial_score DECIMAL(5,2) NOT NULL,
+                            knowledge_score DECIMAL(5,2) NOT NULL,
+                            psychological_score DECIMAL(5,2) NOT NULL,
+                            goals_score DECIMAL(5,2) NOT NULL,
+                            total_score DECIMAL(5,2) NOT NULL,
+                            risk_category VARCHAR(50) NOT NULL,
+                            responses JSON NOT NULL,
+                            ai_analysis JSON NOT NULL,
+                            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                            INDEX idx_user_completed (user_id, completed_at)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    """)
+
+                    cursor.execute("""
+                        INSERT INTO risk_assessments (
+                            user_id, financial_score, knowledge_score,
+                            psychological_score, goals_score, total_score,
+                            risk_category, responses, ai_analysis, completed_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        session['user_id'],
+                        financial_score,
+                        knowledge_score,
+                        psychological_score,
+                        goals_score,
+                        total_score,
+                        category['level'],
+                        json.dumps(responses),
+                        json.dumps(ai_analysis),
+                        datetime.now(),
+                    ))
+
                     cursor.execute("""
                         UPDATE users 
                         SET risk_tolerance = %s, risk_score = %s 
                         WHERE id = %s
-                    """, (risk_level, score, session['user_id']))
+                    """, (category['level'], int(round(total_score)), session['user_id']))
                     conn.commit()
-                    
-                    # Get user's current risk profile
-                    cursor.execute("SELECT risk_score, risk_tolerance FROM users WHERE id = %s", (session['user_id'],))
-                    user_data = cursor.fetchone()
-                    
-                    return render_template('combined.html', 
-                                       section='risk_quiz_result',
-                                       risk_level=risk_level,
-                                       risk_percent=risk_percent,
-                                       score=score,
-                                       max_score=45,
-                                       user_data=user_data)
+
+                    cursor.execute("""
+                        SELECT total_score, completed_at
+                        FROM risk_assessments
+                        WHERE user_id = %s
+                        ORDER BY completed_at DESC
+                        LIMIT 8
+                    """, (session['user_id'],))
+                    history_rows = cursor.fetchall() or []
+
+                    trend_labels = []
+                    trend_scores = []
+                    for row in reversed(history_rows):
+                        score_idx = 0
+                        date_idx = 1
+                        trend_scores.append(float(row[score_idx] or 0))
+                        dt_val = row[date_idx]
+                        trend_labels.append(dt_val.strftime('%b %d') if hasattr(dt_val, 'strftime') else 'Snapshot')
+
+                    return render_template(
+                        'combined.html',
+                        section='risk_quiz_result',
+                        risk_level=category['level'],
+                        risk_percent=risk_percent,
+                        score=total_score,
+                        max_score=100,
+                        recommendation=recommendation,
+                        dimension_scores=dimension_scores,
+                        trend_labels=trend_labels,
+                        trend_scores=trend_scores,
+                        risk_category=category,
+                    )
                     
                 except mysql.connector.Error as err:
                     flash(f"Database error: {err}", "error")
@@ -1067,11 +1159,18 @@ def risk_quiz():
             return redirect(url_for('dashboard'))
             
         except ValueError as e:
-            flash("Invalid input. Please answer all questions.", "error")
+            flash("Invalid input. Please answer all assessment questions.", "error")
             return redirect(url_for('risk_quiz'))
     
     # GET request - show the quiz
-    return render_template('combined.html', section='risk_quiz', questions=questions)
+    return render_template(
+        'combined.html',
+        section='risk_quiz',
+        questions=questions,
+        risk_question_count=len(questions),
+        risk_dimension_count=len(blueprint),
+        estimated_minutes=8,
+    )
 
 @app.route('/dashboard')
 def dashboard():
@@ -1087,10 +1186,22 @@ def dashboard():
     user = None
     triggered_alerts = []
     sold_transactions = []
+    risk_analytics = {
+        'available': False,
+        'latest_score': 0,
+        'risk_category': '',
+        'financial_score': 0,
+        'knowledge_score': 0,
+        'psychological_score': 0,
+        'goals_score': 0,
+        'trend_labels': [],
+        'trend_scores': [],
+        'last_updated': None,
+    }
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT crypto_bucks, tether_balance, risk_tolerance, achievements FROM users WHERE id = %s", (session['user_id'],))
+            cursor.execute("SELECT crypto_bucks, tether_balance, risk_tolerance, risk_score, achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
             if user:
                 user['tether_balance'] = float(user.get('tether_balance', 0))
@@ -1136,6 +1247,41 @@ def dashboard():
                 tx['sold_price'] = float(tx.get('sold_price') or 0)
                 tx['amount'] = float(tx.get('amount') or 0)
                 tx['profit'] = round((tx['sold_price'] - tx['price']) * tx['amount'], 2)
+
+            try:
+                cursor.execute("""
+                    SELECT financial_score, knowledge_score, psychological_score, goals_score,
+                           total_score, risk_category, completed_at
+                    FROM risk_assessments
+                    WHERE user_id = %s
+                    ORDER BY completed_at DESC
+                    LIMIT 10
+                """, (session['user_id'],))
+                assessments = cursor.fetchall() or []
+
+                if assessments:
+                    latest = assessments[0]
+                    risk_analytics['available'] = True
+                    risk_analytics['latest_score'] = float(latest.get('total_score') or 0)
+                    risk_analytics['risk_category'] = latest.get('risk_category') or ''
+                    risk_analytics['financial_score'] = float(latest.get('financial_score') or 0)
+                    risk_analytics['knowledge_score'] = float(latest.get('knowledge_score') or 0)
+                    risk_analytics['psychological_score'] = float(latest.get('psychological_score') or 0)
+                    risk_analytics['goals_score'] = float(latest.get('goals_score') or 0)
+                    risk_analytics['last_updated'] = latest.get('completed_at')
+
+                    trend_labels = []
+                    trend_scores = []
+                    for row in reversed(assessments):
+                        completed_at = row.get('completed_at')
+                        trend_labels.append(completed_at.strftime('%b %d') if completed_at else 'N/A')
+                        trend_scores.append(float(row.get('total_score') or 0))
+
+                    risk_analytics['trend_labels'] = trend_labels
+                    risk_analytics['trend_scores'] = trend_scores
+            except mysql.connector.Error:
+                # Risk table may not exist in some environments yet.
+                pass
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
@@ -1149,6 +1295,7 @@ def dashboard():
         user=user,
         triggered_alerts=triggered_alerts,
         sold_transactions=sold_transactions,
+        risk_analytics=risk_analytics,
         next_check_seconds=CHECK_INTERVAL
     )
 
@@ -2636,10 +2783,180 @@ def achievements():
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT achievements FROM users WHERE id = %s", (session['user_id'],))
-            user = cursor.fetchone()
-            achievements_list = user['achievements'].split(',') if user and user['achievements'] else []
-            return render_template('combined.html', section='achievements', achievements=achievements_list)
+
+            # Current user profile snapshot
+            cursor.execute(
+                "SELECT id, username, risk_score, achievements FROM users WHERE id = %s",
+                (session['user_id'],)
+            )
+            user = cursor.fetchone() or {}
+            raw_achievements = [
+                a.strip() for a in (user.get('achievements') or '').split(',') if a.strip()
+            ]
+
+            # Current user trading metrics
+            cursor.execute("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN type='sell' AND sold_price IS NOT NULL THEN (sold_price - price) * amount ELSE 0 END), 0) AS total_profit,
+                    COALESCE(SUM(CASE WHEN type='sell' AND sold_price IS NOT NULL THEN 1 ELSE 0 END), 0) AS closed_trades,
+                    COALESCE(SUM(CASE WHEN type='sell' AND sold_price IS NOT NULL AND sold_price > price THEN 1 ELSE 0 END), 0) AS winning_trades,
+                    COALESCE(COUNT(DISTINCT CASE WHEN type IN ('buy', 'sell') THEN coin_id END), 0) AS unique_coins
+                FROM transactions
+                WHERE user_id = %s
+            """, (session['user_id'],))
+            user_metrics = cursor.fetchone() or {}
+
+            total_profit = float(user_metrics.get('total_profit') or 0)
+            closed_trades = int(user_metrics.get('closed_trades') or 0)
+            winning_trades = int(user_metrics.get('winning_trades') or 0)
+            unique_coins = int(user_metrics.get('unique_coins') or 0)
+            win_rate = round((winning_trades / closed_trades) * 100, 1) if closed_trades > 0 else 0.0
+            risk_score = int(user.get('risk_score') or 0)
+
+            # Rich achievement definitions with progress
+            achievement_cards = [
+                {
+                    'key': 'first_trade',
+                    'title': 'First Trade',
+                    'description': 'Complete your first closed trade',
+                    'icon': 'fa-medal',
+                    'progress': min(closed_trades, 1),
+                    'target': 1,
+                    'unlocked': (closed_trades >= 1) or ('First Trade' in raw_achievements),
+                },
+                {
+                    'key': 'diamond_hands',
+                    'title': 'Diamond Hands',
+                    'description': 'Reach 15 closed trades',
+                    'icon': 'fa-gem',
+                    'progress': min(closed_trades, 15),
+                    'target': 15,
+                    'unlocked': (closed_trades >= 15) or ('Diamond Hands' in raw_achievements),
+                },
+                {
+                    'key': 'profit_master',
+                    'title': 'Profit Master',
+                    'description': 'Achieve +$1,000 net realized profit',
+                    'icon': 'fa-coins',
+                    'progress': min(max(total_profit, 0), 1000),
+                    'target': 1000,
+                    'unlocked': (total_profit >= 1000) or ('Profit Master' in raw_achievements),
+                },
+                {
+                    'key': 'risk_manager',
+                    'title': 'Risk Manager',
+                    'description': 'Score 70+ in risk assessment',
+                    'icon': 'fa-shield-alt',
+                    'progress': min(max(risk_score, 0), 70),
+                    'target': 70,
+                    'unlocked': (risk_score >= 70) or ('Risk Manager' in raw_achievements),
+                },
+                {
+                    'key': 'diversifier',
+                    'title': 'Diversifier',
+                    'description': 'Trade 5 different coins',
+                    'icon': 'fa-bullseye',
+                    'progress': min(unique_coins, 5),
+                    'target': 5,
+                    'unlocked': (unique_coins >= 5) or ('Diversifier' in raw_achievements),
+                },
+                {
+                    'key': 'consistent_winner',
+                    'title': 'Consistent Winner',
+                    'description': 'Maintain 60%+ win rate over 10+ trades',
+                    'icon': 'fa-chart-line',
+                    'progress': min(win_rate, 60) if closed_trades >= 10 else 0,
+                    'target': 60,
+                    'unlocked': (closed_trades >= 10 and win_rate >= 60) or ('Consistent Winner' in raw_achievements),
+                },
+            ]
+
+            unlocked_count = sum(1 for c in achievement_cards if c['unlocked'])
+
+            # Global leaderboard with multiple factors
+            cursor.execute("""
+                SELECT
+                    u.id,
+                    u.username,
+                    COALESCE(u.risk_score, 0) AS risk_score,
+                    COALESCE(u.achievements, '') AS achievements,
+                    COALESCE(SUM(CASE WHEN t.type='sell' AND t.sold_price IS NOT NULL THEN (t.sold_price - t.price) * t.amount ELSE 0 END), 0) AS total_profit,
+                    COALESCE(SUM(CASE WHEN t.type='sell' AND t.sold_price IS NOT NULL THEN 1 ELSE 0 END), 0) AS closed_trades,
+                    COALESCE(SUM(CASE WHEN t.type='sell' AND t.sold_price IS NOT NULL AND t.sold_price > t.price THEN 1 ELSE 0 END), 0) AS winning_trades,
+                    COALESCE(COUNT(DISTINCT CASE WHEN t.type IN ('buy', 'sell') THEN t.coin_id END), 0) AS diversity
+                FROM users u
+                LEFT JOIN transactions t ON t.user_id = u.id
+                GROUP BY u.id, u.username, u.risk_score, u.achievements
+            """)
+            leaderboard_rows = cursor.fetchall() or []
+
+            leaderboard = []
+            for row in leaderboard_rows:
+                row_profit = float(row.get('total_profit') or 0)
+                row_trades = int(row.get('closed_trades') or 0)
+                row_wins = int(row.get('winning_trades') or 0)
+                row_risk = int(row.get('risk_score') or 0)
+                row_diversity = int(row.get('diversity') or 0)
+                row_ach_count = len([a for a in str(row.get('achievements') or '').split(',') if a.strip()])
+                row_win_rate = (row_wins / row_trades * 100.0) if row_trades > 0 else 0.0
+
+                profit_factor = max(min((max(row_profit, 0) / 2000.0) * 30.0, 30.0), 0.0)
+                win_rate_factor = max(min((row_win_rate / 100.0) * 20.0, 20.0), 0.0)
+                trade_factor = max(min((row_trades / 30.0) * 20.0, 20.0), 0.0)
+                risk_factor = max(min((row_risk / 100.0) * 15.0, 15.0), 0.0)
+                diversity_factor = max(min((row_diversity / 10.0) * 10.0, 10.0), 0.0)
+                achievement_factor = max(min((row_ach_count / 10.0) * 5.0, 5.0), 0.0)
+
+                composite_score = round(
+                    profit_factor + win_rate_factor + trade_factor + risk_factor + diversity_factor + achievement_factor,
+                    2,
+                )
+
+                leaderboard.append({
+                    'user_id': row.get('id'),
+                    'username': row.get('username') or 'Trader',
+                    'total_profit': row_profit,
+                    'closed_trades': row_trades,
+                    'win_rate': round(row_win_rate, 1),
+                    'risk_score': row_risk,
+                    'diversity': row_diversity,
+                    'achievement_count': row_ach_count,
+                    'score': composite_score,
+                })
+
+            leaderboard.sort(key=lambda x: (x['score'], x['total_profit']), reverse=True)
+            for idx, row in enumerate(leaderboard, start=1):
+                row['rank'] = idx
+
+            top_leaderboard = leaderboard[:25]
+            my_rank_row = next((r for r in leaderboard if r['user_id'] == session['user_id']), None)
+
+            return render_template(
+                'combined.html',
+                section='achievements',
+                achievements=raw_achievements,
+                achievement_cards=achievement_cards,
+                unlocked_count=unlocked_count,
+                total_achievements=len(achievement_cards),
+                user_metrics={
+                    'total_profit': total_profit,
+                    'closed_trades': closed_trades,
+                    'win_rate': win_rate,
+                    'risk_score': risk_score,
+                    'diversity': unique_coins,
+                },
+                leaderboard=top_leaderboard,
+                leaderboard_count=len(leaderboard),
+                my_rank=my_rank_row,
+                score_factors=[
+                    'Net realized profit (30%)',
+                    'Win rate (20%)',
+                    'Closed trades volume (20%)',
+                    'Risk assessment score (15%)',
+                    'Coin diversity (10%)',
+                    'Achievement count (5%)',
+                ],
+            )
         except mysql.connector.Error as err:
             flash(f"Database error: {err}", "error")
         finally:
@@ -3538,6 +3855,149 @@ def _rag_retrieve(query, top_k=5):
     if not top:
         top = [e for _, e in scored[:3]]
     return "\n\n".join(f"### {e['title']}\n{e['content']}" for e in top)
+
+
+@app.route('/api/portfolio-context', methods=['GET'])
+def get_portfolio_context():
+    """
+    Returns the current user's live portfolio data for the AI chatbot.
+    Shape matches exactly what BottomTutorChat.tsx sends as userContext.
+    """
+    if 'user_id' not in session or session.get('expires_at', 0) < datetime.now().timestamp():
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_id']
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database unavailable'}), 500
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # ── 1. User basics ──────────────────────────────────────────────
+        cursor.execute(
+            "SELECT username, crypto_bucks, tether_balance, risk_tolerance FROM users WHERE id = %s",
+            (user_id,)
+        )
+        user = cursor.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        username       = user['username']
+        crypto_bucks   = float(user['crypto_bucks'] or 0)
+        tether_balance = float(user['tether_balance'] or 0)
+        risk_tolerance = user.get('risk_tolerance') or 'Not set'
+
+        # ── 2. Open holdings (buy txns minus sold amounts) ──────────────
+        cursor.execute("""
+            SELECT coin_id,
+                   SUM(amount) AS total_bought,
+                   AVG(price)  AS avg_price
+            FROM transactions
+            WHERE user_id = %s AND type = 'buy'
+            GROUP BY coin_id
+        """, (user_id,))
+        buys = {row['coin_id']: {
+            'total_bought': float(row['total_bought'] or 0),
+            'avg_price':    float(row['avg_price'] or 0)
+        } for row in cursor.fetchall()}
+
+        cursor.execute("""
+            SELECT coin_id, SUM(amount) AS total_sold
+            FROM transactions
+            WHERE user_id = %s AND type = 'sell'
+            GROUP BY coin_id
+        """, (user_id,))
+        sold_map = {row['coin_id']: float(row['total_sold'] or 0)
+                    for row in cursor.fetchall()}
+
+        holdings = []
+        for coin_id, data in buys.items():
+            remaining = data['total_bought'] - sold_map.get(coin_id, 0.0)
+            if remaining > 0.000001:
+                holdings.append({
+                    'coin_id': coin_id,
+                    'amount':  round(remaining, 8),
+                    'avg_buy_price': round(data['avg_price'], 2)
+                })
+
+        # ── 3. Recent sell transactions (last 10) ───────────────────────
+        cursor.execute("""
+            SELECT coin_id, amount, price AS buy_price, sold_price,
+                   ROUND((sold_price - price) * amount, 2) AS profit
+            FROM transactions
+            WHERE user_id = %s AND type = 'sell' AND sold_price IS NOT NULL
+            ORDER BY id DESC
+            LIMIT 10
+        """, (user_id,))
+        recent_sells = cursor.fetchall()
+
+        cursor.close()
+
+        # ── 4. Fetch live prices for open holdings ─────────────────────
+        live_prices = {}
+        if holdings:
+            coin_ids_str = ','.join(h['coin_id'] for h in holdings)
+            try:
+                resp = requests.get(
+                    f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids_str}",
+                    timeout=8
+                )
+                if resp.status_code == 200:
+                    for c in resp.json():
+                        live_prices[c['id']] = float(c.get('current_price', 0))
+            except Exception:
+                pass   # fall back to no live price
+
+        # ── 5. Build userContext strings ───────────────────────────────
+        portfolio_parts = []
+        total_unrealized = 0.0
+        for h in holdings:
+            coin    = h['coin_id'].upper()
+            amount  = h['amount']
+            avg_buy = h['avg_buy_price']
+            current = live_prices.get(h['coin_id'], 0)
+            unreal  = round((current - avg_buy) * amount, 2) if current else None
+            if unreal is not None:
+                total_unrealized += unreal
+                unreal_str = f"(UnrealizedP/L: ${unreal:+.2f})"
+            else:
+                unreal_str = ""
+            portfolio_parts.append(
+                f"{amount} {coin} @ avg ${avg_buy} {unreal_str}".strip()
+            )
+
+        portfolio_str = "; ".join(portfolio_parts) if portfolio_parts else "No open holdings"
+
+        recent_trades_parts = []
+        for t in recent_sells:
+            coin    = str(t['coin_id']).upper()
+            profit  = float(t['profit'] or 0)
+            b_price = float(t['buy_price'] or 0)
+            s_price = float(t['sold_price'] or 0)
+            recent_trades_parts.append(
+                f"{coin}: bought ${b_price:.2f}, sold ${s_price:.2f}, P/L: ${profit:+.2f}"
+            )
+        recent_trades_str = "; ".join(recent_trades_parts) if recent_trades_parts else "No recent trades"
+
+        return jsonify({
+            'username':      username,
+            'cryptoBucks':   str(round(crypto_bucks, 2)),
+            'tetherBalance': str(round(tether_balance, 2)),
+            'riskTolerance': risk_tolerance,
+            'portfolio':     portfolio_str,
+            'recentTrades':  recent_trades_str,
+            # extra structured data for richer display
+            'holdingsCount':     len(holdings),
+            'totalUnrealized':   round(total_unrealized, 2),
+        })
+
+    except Exception as e:
+        print(f"Error in /api/portfolio-context: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn.is_connected():
+            conn.close()
 
 
 @app.route('/api/ai-tutor', methods=['POST'])

@@ -165,6 +165,19 @@ class AIAssistant:
             "timestamp": datetime.now().isoformat()
         }
     
+    # Keywords that indicate the user is asking about their own portfolio/trades/balance
+    _PORTFOLIO_KEYWORDS = re.compile(
+        r'\b(portfolio|holding|open trade|position|balance|p/?l|profit|loss|'
+        r'performance|exposure|allocation|tether|usdt|cryptobuck|my trade|'
+        r'order|orders|open order|pending order|limit order|stop order|take profit|'
+        r'my coin|my bitcoin|my eth|my xrp|my bnb|what do i hold|'
+        r'what am i holding|how much|how many|how am i doing)\b',
+        re.IGNORECASE
+    )
+
+    def _is_portfolio_query(self, text: str) -> bool:
+        return bool(self._PORTFOLIO_KEYWORDS.search(text))
+
     def query(
         self, 
         user_id: int, 
@@ -173,29 +186,40 @@ class AIAssistant:
         n_results: int = 3
     ) -> Dict:
         """
-        Main query method: RAG search + personalized prompt + Claude response
-        
-        Args:
-            user_id: User ID for personalization
-            question: User's question
-            session_id: Conversation session ID
-            n_results: Number of relevant docs to retrieve
-            
-        Returns:
-            Dict with response, sources, and metadata
+        Main query method: RAG search + personalized prompt + AI response.
+        Portfolio-intent questions are grounded in live DB data.
         """
         start_time = time.time()
-        
+
         # 1. Get user profile for personalization
         user_profile = self._get_user_profile(user_id)
-        
-        # 2. Search knowledge base (RAG)
+
+        # 2. Optionally fetch live portfolio data
+        portfolio_block = ""
+        is_portfolio_q = self._is_portfolio_query(question)
+        if is_portfolio_q:
+            portfolio_block = self._get_live_portfolio(user_id)
+            # Hard failsafe: if no real data exists, refuse to hallucinate
+            if not portfolio_block.strip():
+                return {
+                    "response": (
+                        "I don't have access to your live portfolio data right now. "
+                        "Please refresh the page or ensure you are logged in."
+                    ),
+                    "sources": [],
+                    "response_time_ms": 0,
+                    "user_level": user_profile['skill_level']
+                }
+
+        # 3. Search knowledge base (RAG)
         relevant_docs = self._search_knowledge(question, n_results)
-        
-        # 3. Build personalized prompt
-        prompt = self._build_prompt(question, user_profile, relevant_docs)
-        
-        # 4. Query AI (Claude or Gemini)
+
+        # 4. Build personalized prompt (with live portfolio if available)
+        prompt = self._build_prompt(question, user_profile, relevant_docs,
+                                    portfolio_block=portfolio_block,
+                                    is_portfolio_q=is_portfolio_q)
+
+        # 5. Query AI (Claude or Gemini)
         try:
             if self.provider == "claude":
                 response = self.ai_client.messages.create(
@@ -206,7 +230,6 @@ class AIAssistant:
                     messages=[{"role": "user", "content": prompt}]
                 )
                 ai_response = response.content[0].text
-                
             elif self.provider == "gemini":
                 full_prompt = f"{self._get_system_prompt(user_profile)}\n\n{prompt}"
                 ai_response = self._generate_gemini(
@@ -214,14 +237,15 @@ class AIAssistant:
                     temperature=0.7,
                     max_output_tokens=2048
                 )
-            
         except Exception as e:
-            ai_response = f"I encountered an error: {str(e)}. Please try again or rephrase your question."
-        
-        # 5. Add safety disclaimer
+            ai_response = (
+                f"I encountered an error: {str(e)}. Please try again or rephrase your question."
+            )
+
+        # 6. Add safety disclaimer
         final_response = f"{ai_response}\n\n{self.SAFETY_DISCLAIMER}"
-        
-        # 6. Log conversation
+
+        # 7. Log conversation
         response_time = int((time.time() - start_time) * 1000)
         self._log_conversation(
             user_id=user_id,
@@ -232,12 +256,14 @@ class AIAssistant:
             response_time=response_time,
             user_skill=user_profile['skill_level']
         )
-        
+
         return {
             "response": final_response,
-            "sources": [{"title": doc['metadata']['title'], 
-                        "category": doc['metadata']['category']} 
-                       for doc in relevant_docs],
+            "sources": [
+                {"title": doc['metadata']['title'],
+                 "category": doc['metadata']['category']}
+                for doc in relevant_docs
+            ],
             "response_time_ms": response_time,
             "user_level": user_profile['skill_level']
         }
@@ -844,11 +870,14 @@ STRICT:
         if preferred_model:
             candidate_models.append(preferred_model)
 
-        # Stable defaults across most API keys/projects.
+        # Prefer currently supported flash-family models first, then older fallbacks.
         candidate_models.extend([
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
+            'gemini-2.0-flash',
+            'gemini-2.0-flash-lite',
             'gemini-1.5-flash',
             'gemini-1.5-pro',
-            'gemini-2.0-flash',
         ])
 
         tried = set()
@@ -885,7 +914,9 @@ STRICT:
 
         if "resource_exhausted" in err or "quota" in err or "429" in err:
             return "Quota exceeded for this Gemini API key/project"
-        if "not_found" in err or "model" in err and "not found" in err:
+        if "not_found" in err or "model" in err and "not found" in err or "model unavailable" in err:
+            return "Model unavailable for this API key/API version"
+        if "api version" in err and "not" in err:
             return "Model unavailable for this API key/API version"
         if "permission_denied" in err or "403" in err:
             return "Permission denied for the selected model"
@@ -1171,6 +1202,50 @@ STRICT:
                 SELECT * FROM learning_profiles WHERE user_id = %s
             """, (user_id,))
             profile = cursor.fetchone()
+
+        # Keep profile resilient even if schema/data changes.
+        profile = profile or {}
+
+        # Merge live transaction-derived stats so AI answers reflect actual user activity.
+        cursor.execute("""
+            SELECT
+                COUNT(*) AS total_trade_actions,
+                SUM(CASE WHEN type = 'buy' THEN 1 ELSE 0 END) AS total_buys,
+                SUM(CASE WHEN type = 'sell' THEN 1 ELSE 0 END) AS total_sells,
+                SUM(CASE WHEN type = 'stop' THEN 1 ELSE 0 END) AS total_stop_orders,
+                SUM(CASE WHEN type = 'sell' AND sold_price IS NOT NULL AND sold_price > price THEN 1 ELSE 0 END) AS winning_sells,
+                SUM(CASE WHEN type = 'sell' AND sold_price IS NOT NULL AND sold_price <= price THEN 1 ELSE 0 END) AS losing_sells,
+                AVG(CASE WHEN type = 'sell' AND sold_price IS NOT NULL AND sold_price > price THEN (sold_price - price) * amount END) AS avg_profit_trade,
+                AVG(CASE WHEN type = 'sell' AND sold_price IS NOT NULL AND sold_price <= price THEN ABS((sold_price - price) * amount) END) AS avg_loss_trade
+            FROM transactions
+            WHERE user_id = %s
+        """, (user_id,))
+        live_stats = cursor.fetchone() or {}
+
+        total_trade_actions = int(live_stats.get('total_trade_actions') or 0)
+        total_buys = int(live_stats.get('total_buys') or 0)
+        winning_sells = int(live_stats.get('winning_sells') or 0)
+        losing_sells = int(live_stats.get('losing_sells') or 0)
+        closed_trades = winning_sells + losing_sells
+
+        win_rate = round((winning_sells / closed_trades) * 100, 2) if closed_trades > 0 else 0.0
+
+        # Stop-loss usage is inferred from explicit stop orders when present.
+        stop_usage_pct = float(profile.get('uses_stop_loss_percent') or 0.0)
+        total_stop_orders = int(live_stats.get('total_stop_orders') or 0)
+        if total_buys > 0:
+            stop_usage_pct = round((total_stop_orders / total_buys) * 100, 2)
+
+        profile['total_trades'] = total_trade_actions
+        profile['winning_trades'] = winning_sells
+        profile['losing_trades'] = losing_sells
+        profile['win_rate'] = win_rate
+        profile['uses_stop_loss_percent'] = stop_usage_pct
+        profile['avg_profit_per_trade'] = float(live_stats.get('avg_profit_trade') or 0.0)
+        profile['avg_loss_per_trade'] = float(live_stats.get('avg_loss_trade') or 0.0)
+        profile['skill_level'] = profile.get('skill_level') or 'beginner'
+        profile['avg_leverage_used'] = float(profile.get('avg_leverage_used') or 1.0)
+        profile['biggest_mistake'] = profile.get('biggest_mistake') or ''
         
         # Parse JSON fields
         profile['weak_areas'] = json.loads(profile.get('weak_areas') or '[]')
@@ -1181,7 +1256,170 @@ STRICT:
         conn.close()
         
         return profile
-    
+
+    def _get_live_portfolio(self, user_id: int) -> str:
+        """
+        Fetch current balances, holdings, trades, and orders from MySQL.
+        Returns a pre-formatted text block ready for prompt injection.
+        Returns empty string on any DB error.
+        """
+        try:
+            conn = self.get_db()
+            cursor = conn.cursor(dictionary=True)
+
+            # -- User balances --------------------------------------------
+            cursor.execute(
+                "SELECT username, crypto_bucks, tether_balance, risk_tolerance "
+                "FROM users WHERE id = %s",
+                (user_id,)
+            )
+            user = cursor.fetchone()
+            if not user:
+                cursor.close(); conn.close()
+                return ""
+
+            # -- Aggregate open holdings: total bought minus total sold ----
+            cursor.execute("""
+                SELECT coin_id,
+                       SUM(CASE WHEN type='buy'  THEN amount ELSE 0 END) AS total_bought,
+                       SUM(CASE WHEN type='sell' THEN amount ELSE 0 END) AS total_sold,
+                       AVG(CASE WHEN type='buy'  THEN price  ELSE NULL END) AS avg_buy_price
+                FROM transactions
+                WHERE user_id = %s
+                GROUP BY coin_id
+            """, (user_id,))
+
+            holdings_rows = cursor.fetchall()
+            open_holdings = []
+            for row in holdings_rows:
+                remaining = float(row['total_bought'] or 0) - float(row['total_sold'] or 0)
+                if remaining > 0.000001:
+                    avg_buy = float(row['avg_buy_price'] or 0)
+                    open_holdings.append({
+                        'coin': row['coin_id'].upper(),
+                        'amount': round(remaining, 8),
+                        'avg_buy': round(avg_buy, 2),
+                    })
+
+            # -- Recent sell transactions (last 10) -----------------------
+            cursor.execute("""
+                SELECT coin_id, amount, price AS buy_price, sold_price,
+                       ROUND((sold_price - price) * amount, 2) AS profit
+                FROM transactions
+                WHERE user_id = %s AND type = 'sell' AND sold_price IS NOT NULL
+                ORDER BY id DESC
+                LIMIT 10
+            """, (user_id,))
+            recent_sells = cursor.fetchall()
+
+            # -- Orders snapshot (if trading schema is available) -----------
+            open_orders = []
+            recent_filled_orders = []
+            try:
+                cursor.execute("""
+                    SELECT id, base_currency, quote_currency, order_type, side,
+                           amount, price, stop_price, filled_amount, status, created_at
+                    FROM orders
+                    WHERE user_id = %s AND status IN ('pending', 'partially_filled')
+                    ORDER BY created_at DESC
+                    LIMIT 10
+                """, (user_id,))
+                open_orders = cursor.fetchall() or []
+
+                cursor.execute("""
+                    SELECT id, base_currency, quote_currency, order_type, side,
+                           amount, price, stop_price, filled_amount, status, filled_at
+                    FROM orders
+                    WHERE user_id = %s AND status = 'filled'
+                    ORDER BY filled_at DESC, created_at DESC
+                    LIMIT 10
+                """, (user_id,))
+                recent_filled_orders = cursor.fetchall() or []
+            except Exception:
+                # Orders table may not exist on older setups; continue with portfolio/trade data.
+                open_orders = []
+                recent_filled_orders = []
+
+            cursor.close(); conn.close()
+
+            # -- Build text block -----------------------------------------
+            lines = [
+                f"Username       : {user['username']}",
+                f"CryptoBucks    : ${float(user['crypto_bucks'] or 0):,.2f}",
+                f"USDT Balance   : ${float(user['tether_balance'] or 0):,.2f}",
+                f"Risk Tolerance : {user.get('risk_tolerance') or 'Not set'}",
+                "",
+            ]
+
+            if open_holdings:
+                lines.append("OPEN HOLDINGS:")
+                for h in open_holdings:
+                    lines.append(
+                        f"  {h['amount']} {h['coin']}  "
+                        f"(avg buy price: ${h['avg_buy']:,.2f})"
+                    )
+            else:
+                lines.append("OPEN HOLDINGS: None — no unsold positions.")
+
+            lines.append("")
+
+            if recent_sells:
+                lines.append("RECENT CLOSED TRADES (latest first):")
+                for t in recent_sells:
+                    profit = float(t['profit'] or 0)
+                    sign = "+" if profit >= 0 else ""
+                    lines.append(
+                        f"  {t['coin_id'].upper()}: bought ${float(t['buy_price'] or 0):,.2f}, "
+                        f"sold ${float(t['sold_price'] or 0):,.2f}, "
+                        f"P/L: {sign}${profit:,.2f}"
+                    )
+            else:
+                lines.append("RECENT CLOSED TRADES: None yet.")
+
+            lines.append("")
+
+            if open_orders:
+                lines.append("OPEN ORDERS (pending/partially filled):")
+                for o in open_orders:
+                    pair = f"{str(o.get('base_currency') or '').upper()}/{str(o.get('quote_currency') or '').upper()}"
+                    amount = float(o.get('amount') or 0)
+                    price = o.get('price')
+                    stop_price = o.get('stop_price')
+                    filled_amount = float(o.get('filled_amount') or 0)
+                    price_text = f" @ ${float(price):,.4f}" if price is not None else " @ market"
+                    stop_text = f", stop ${float(stop_price):,.4f}" if stop_price is not None else ""
+                    lines.append(
+                        f"  #{o.get('id')}: {str(o.get('side') or '').upper()} {amount:.8f} {pair} "
+                        f"[{str(o.get('order_type') or '').upper()}]{price_text}{stop_text}, "
+                        f"filled {filled_amount:.8f}, status {str(o.get('status') or '').upper()}"
+                    )
+            else:
+                lines.append("OPEN ORDERS: None.")
+
+            lines.append("")
+
+            if recent_filled_orders:
+                lines.append("RECENT FILLED ORDERS (latest first):")
+                for o in recent_filled_orders:
+                    pair = f"{str(o.get('base_currency') or '').upper()}/{str(o.get('quote_currency') or '').upper()}"
+                    amount = float(o.get('amount') or 0)
+                    price = o.get('price')
+                    stop_price = o.get('stop_price')
+                    price_text = f" @ ${float(price):,.4f}" if price is not None else " @ market"
+                    stop_text = f", stop ${float(stop_price):,.4f}" if stop_price is not None else ""
+                    lines.append(
+                        f"  #{o.get('id')}: {str(o.get('side') or '').upper()} {amount:.8f} {pair} "
+                        f"[{str(o.get('order_type') or '').upper()}]{price_text}{stop_text}"
+                    )
+            else:
+                lines.append("RECENT FILLED ORDERS: None yet.")
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            print(f"[AIAssistant] _get_live_portfolio error: {e}")
+            return ""
+
     def _search_knowledge(self, query: str, n_results: int = 3) -> List[Dict]:
         """Search ChromaDB for relevant content"""
         try:
@@ -1206,46 +1444,68 @@ STRICT:
             print(f"Search error: {e}")
             return []
     
-    def _build_prompt(self, question: str, user_profile: Dict, docs: List[Dict]) -> str:
-        """Build personalized prompt with context"""
-        
-        # Format user context
-        user_context = f"""
-        USER PROFILE:
-        - Skill Level: {user_profile['skill_level']}
-        - Total Trades: {user_profile['total_trades']}
-        - Win Rate: {user_profile['win_rate']}%
-        - Uses Stop Loss: {user_profile['uses_stop_loss_percent']}% of trades
-        - Average Leverage: {user_profile['avg_leverage_used']}x
-        - Weak Areas: {', '.join(user_profile['weak_areas']) if user_profile['weak_areas'] else 'None identified'}
-        - Biggest Mistake: {user_profile['biggest_mistake'] or 'Not yet identified'}
-        """
-        
-        # Format retrieved knowledge
+    def _build_prompt(
+        self,
+        question: str,
+        user_profile: Dict,
+        docs: List[Dict],
+        portfolio_block: str = "",
+        is_portfolio_q: bool = False,
+    ) -> str:
+        """Build personalized prompt with RAG context and optional live portfolio data."""
+
+        user_context = f"""\
+USER PROFILE:
+- Skill Level: {user_profile['skill_level']}
+- Total Trades: {user_profile['total_trades']}
+- Win Rate: {user_profile['win_rate']}%
+- Uses Stop Loss: {user_profile['uses_stop_loss_percent']}% of trades
+- Average Leverage: {user_profile['avg_leverage_used']}x
+- Weak Areas: {', '.join(user_profile['weak_areas']) if user_profile['weak_areas'] else 'None identified'}
+- Biggest Mistake: {user_profile['biggest_mistake'] or 'Not yet identified'}"""
+
         knowledge_context = self._format_docs_for_prompt(docs)
-        
-        prompt = f"""
-        CONTEXT FROM KNOWLEDGE BASE:
-        {knowledge_context}
-        
-        {user_context}
-        
-        USER QUESTION:
-        {question}
-        
-        INSTRUCTIONS:
-        - Answer using the knowledge base content above
-        - Personalize based on the user's profile (skill level, mistakes, weak areas)
-        - Reference their specific trading stats when relevant
-        - Use concrete examples from their experience level
-        - Be encouraging but honest
-        - If they're making the same mistake repeatedly, address it directly
-        - Keep response under 500 words
-        - Use formatting (bullets, bold) for readability
-        
-        Answer:
-        """
-        
+
+        # -- Live portfolio block (only injected when we have real data) ------
+        portfolio_section = ""
+        portfolio_rules = ""
+        if portfolio_block:
+            portfolio_section = f"""\
+=======================================
+LIVE PORTFOLIO DATA  (SOURCE OF TRUTH)
+=======================================
+{portfolio_block}
+=======================================
+"""
+            portfolio_rules = """\
+ANTI-HALLUCINATION RULES (portfolio questions):
+- Use ONLY the data in the LIVE PORTFOLIO DATA block above.
+- Never invent balances, holdings, P&L, or trade history.
+- If a number is not shown above, say you don't have that data.
+- Always reference specific coins/amounts from the block when answering.
+"""
+
+        prompt = f"""\
+CONTEXT FROM KNOWLEDGE BASE:
+{knowledge_context}
+
+{user_context}
+
+{portfolio_section}{portfolio_rules}
+USER QUESTION:
+{question}
+
+INSTRUCTIONS:
+- Answer using the knowledge base content and (if present) the LIVE PORTFOLIO DATA above.
+- Personalize based on the user's profile (skill level, mistakes, weak areas).
+- Reference their specific stats and holdings when relevant.
+- Use concrete examples from their experience level.
+- Be encouraging but honest.
+- Keep response under 500 words.
+- Use formatting (bullets, bold) for readability.
+
+Answer:"""
+
         return prompt
     
     def _get_system_prompt(self, user_profile: Dict) -> str:

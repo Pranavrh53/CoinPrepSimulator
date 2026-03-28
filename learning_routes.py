@@ -188,6 +188,257 @@ def _looks_like_ai_provider_error(text):
     return any(token in err for token in indicators)
 
 
+_PORTFOLIO_QUERY_RE = re.compile(
+    r'\b(analy[sz]e|analysis|review|summarize|evaluate|check)\b.*\b(portfolio|holdings|positions|p/?l|profit|loss|performance)\b|'
+    r'\b(portfolio|holdings|positions|allocation|exposure|p/?l|profit|loss|performance|'
+    r'order|orders|open order|pending order|limit order|stop order|take profit|how am i doing)\b',
+    re.IGNORECASE
+)
+
+
+def _looks_like_portfolio_question(text: str) -> bool:
+    return bool(_PORTFOLIO_QUERY_RE.search((text or '').strip()))
+
+
+def _build_rule_based_portfolio_analysis(user_id: int) -> str:
+    """Build a useful portfolio analysis from DB when AI provider is unavailable."""
+    from app import get_db_connection
+
+    conn = get_db_connection()
+    if not conn:
+        return (
+            "## Portfolio Analysis\n"
+            "I could not access your portfolio data right now because the database connection is unavailable. "
+            "Please retry in a moment.\n\n"
+            "⚠️ IMPORTANT DISCLAIMER:\n"
+            "- This is educational content for a SIMULATOR using fake money\n"
+            "- NOT financial advice\n"
+            "- Real crypto trading involves significant risk\n"
+            "- Never invest more than you can afford to lose\n"
+            "- Past performance doesn't guarantee future results"
+        )
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            "SELECT username, crypto_bucks, tether_balance, risk_tolerance FROM users WHERE id = %s",
+            (user_id,)
+        )
+        user = cursor.fetchone() or {}
+
+        if not user:
+            return (
+                "## Portfolio Analysis\n"
+                "I could not find your user profile to analyze your portfolio.\n\n"
+                "⚠️ IMPORTANT DISCLAIMER:\n"
+                "- This is educational content for a SIMULATOR using fake money\n"
+                "- NOT financial advice\n"
+                "- Real crypto trading involves significant risk\n"
+                "- Never invest more than you can afford to lose\n"
+                "- Past performance doesn't guarantee future results"
+            )
+
+        cursor.execute("""
+            SELECT coin_id,
+                   SUM(CASE WHEN type='buy' THEN amount ELSE 0 END) AS total_bought,
+                   SUM(CASE WHEN type='sell' THEN amount ELSE 0 END) AS total_sold,
+                   AVG(CASE WHEN type='buy' THEN price ELSE NULL END) AS avg_buy
+            FROM transactions
+            WHERE user_id = %s
+            GROUP BY coin_id
+        """, (user_id,))
+        holding_rows = cursor.fetchall() or []
+
+        open_holdings = []
+        for row in holding_rows:
+            bought = float(row.get('total_bought') or 0)
+            sold = float(row.get('total_sold') or 0)
+            remaining = bought - sold
+            if remaining > 1e-8:
+                open_holdings.append({
+                    'coin': str(row.get('coin_id') or '').upper(),
+                    'amount': remaining,
+                    'avg_buy': float(row.get('avg_buy') or 0),
+                })
+
+        cursor.execute("""
+            SELECT coin_id, amount, price AS buy_price, sold_price,
+                   ROUND((sold_price - price) * amount, 2) AS profit
+            FROM transactions
+            WHERE user_id = %s AND type = 'sell' AND sold_price IS NOT NULL
+            ORDER BY id DESC
+            LIMIT 20
+        """, (user_id,))
+        closed_trades = cursor.fetchall() or []
+
+        wins = [float(t.get('profit') or 0) for t in closed_trades if float(t.get('profit') or 0) > 0]
+        losses = [float(t.get('profit') or 0) for t in closed_trades if float(t.get('profit') or 0) < 0]
+        total_realized = sum(float(t.get('profit') or 0) for t in closed_trades)
+        win_rate = (len(wins) / len(closed_trades) * 100.0) if closed_trades else 0.0
+        avg_win = (sum(wins) / len(wins)) if wins else 0.0
+        avg_loss = (sum(losses) / len(losses)) if losses else 0.0
+
+        open_orders = []
+        filled_orders = []
+        cancelled_orders = 0
+        try:
+            cursor.execute("""
+                SELECT id, base_currency, quote_currency, order_type, side,
+                       amount, price, stop_price, status, created_at
+                FROM orders
+                WHERE user_id = %s AND status IN ('pending', 'partially_filled')
+                ORDER BY created_at DESC
+                LIMIT 12
+            """, (user_id,))
+            open_orders = cursor.fetchall() or []
+
+            cursor.execute("""
+                SELECT id, base_currency, quote_currency, order_type, side,
+                       amount, price, stop_price, status, filled_at
+                FROM orders
+                WHERE user_id = %s AND status = 'filled'
+                ORDER BY filled_at DESC, created_at DESC
+                LIMIT 8
+            """, (user_id,))
+            filled_orders = cursor.fetchall() or []
+
+            cursor.execute("""
+                SELECT COUNT(*) AS cancelled_count
+                FROM orders
+                WHERE user_id = %s AND status = 'cancelled'
+            """, (user_id,))
+            cancelled_orders = int((cursor.fetchone() or {}).get('cancelled_count') or 0)
+        except Exception:
+            open_orders = []
+            filled_orders = []
+            cancelled_orders = 0
+
+        lines = [
+            "## Portfolio Analysis",
+            f"User: **{user.get('username', 'Unknown')}**",
+            f"Risk tolerance: **{user.get('risk_tolerance') or 'Not set'}**",
+            "",
+            "### Account Snapshot",
+            f"- CryptoBucks balance: **${float(user.get('crypto_bucks') or 0):,.2f}**",
+            f"- USDT balance: **${float(user.get('tether_balance') or 0):,.2f}**",
+            f"- Open holdings count: **{len(open_holdings)}**",
+            f"- Closed trades analyzed: **{len(closed_trades)}**",
+            f"- Open/pending orders: **{len(open_orders)}**",
+            f"- Recently filled orders analyzed: **{len(filled_orders)}**",
+            f"- Cancelled orders: **{cancelled_orders}**",
+            "",
+        ]
+
+        if open_holdings:
+            lines.append("### Open Holdings")
+            for h in open_holdings[:8]:
+                lines.append(f"- {h['coin']}: {h['amount']:.6f} units, avg buy ${h['avg_buy']:.2f}")
+            if len(open_holdings) > 8:
+                lines.append(f"- ...and {len(open_holdings) - 8} more holdings")
+            lines.append("")
+        else:
+            lines.extend([
+                "### Open Holdings",
+                "- No open holdings found.",
+                "",
+            ])
+
+        lines.extend([
+            "### Closed Trade Performance",
+            f"- Win rate: **{win_rate:.1f}%**",
+            f"- Net realized P/L (recent closed trades): **${total_realized:+,.2f}**",
+            f"- Average winning trade: **${avg_win:+,.2f}**",
+            f"- Average losing trade: **${avg_loss:+,.2f}**",
+            "",
+            "### Coaching Notes",
+        ])
+
+        if open_orders:
+            lines.append("")
+            lines.append("### Open Orders")
+            for o in open_orders[:8]:
+                base = str(o.get('base_currency') or '').upper()
+                quote = str(o.get('quote_currency') or '').upper()
+                pair = f"{base}/{quote}" if base and quote else base or quote or "UNKNOWN"
+                amount = float(o.get('amount') or 0)
+                price = o.get('price')
+                stop_price = o.get('stop_price')
+                px = f" @ ${float(price):,.4f}" if price is not None else " @ market"
+                stop = f", stop ${float(stop_price):,.4f}" if stop_price is not None else ""
+                lines.append(
+                    f"- #{o.get('id')}: {str(o.get('side') or '').upper()} {amount:.6f} {pair} "
+                    f"({str(o.get('order_type') or '').replace('_', ' ')}, {str(o.get('status') or '').replace('_', ' ')}){px}{stop}"
+                )
+            if len(open_orders) > 8:
+                lines.append(f"- ...and {len(open_orders) - 8} more open orders")
+        else:
+            lines.append("")
+            lines.append("### Open Orders")
+            lines.append("- No open/pending orders found.")
+
+        if filled_orders:
+            lines.append("")
+            lines.append("### Recently Filled Orders")
+            for o in filled_orders[:6]:
+                base = str(o.get('base_currency') or '').upper()
+                quote = str(o.get('quote_currency') or '').upper()
+                pair = f"{base}/{quote}" if base and quote else base or quote or "UNKNOWN"
+                amount = float(o.get('amount') or 0)
+                price = o.get('price')
+                px = f" @ ${float(price):,.4f}" if price is not None else " @ market"
+                lines.append(
+                    f"- #{o.get('id')}: {str(o.get('side') or '').upper()} {amount:.6f} {pair} "
+                    f"({str(o.get('order_type') or '').replace('_', ' ')}){px}"
+                )
+
+        if not closed_trades:
+            lines.append("- Not enough closed-trade history yet. Focus on consistent position sizing and stop-loss discipline.")
+        else:
+            if win_rate < 45:
+                lines.append("- Your win rate is currently low. Prioritize selective entries over frequent trades.")
+            elif win_rate >= 55:
+                lines.append("- Your win rate is healthy. Keep protecting capital with strict invalidation rules.")
+            else:
+                lines.append("- Your win rate is moderate. Improving entry quality can meaningfully raise consistency.")
+
+            if abs(avg_loss) > avg_win and avg_loss != 0:
+                lines.append("- Average losses are larger than winners. Tighten stop-losses and avoid moving stops away from risk.")
+            else:
+                lines.append("- Your win/loss size balance is reasonable. Maintain risk caps per trade.")
+
+            if total_realized < 0:
+                lines.append("- Net realized P/L is negative in recent history. Reduce size and trade only your highest-conviction setups.")
+            else:
+                lines.append("- Net realized P/L is positive in recent history. Stay process-focused and avoid overconfidence.")
+
+        lines.extend([
+            "",
+            "⚠️ IMPORTANT DISCLAIMER:",
+            "- This is educational content for a SIMULATOR using fake money",
+            "- NOT financial advice",
+            "- Real crypto trading involves significant risk",
+            "- Never invest more than you can afford to lose",
+            "- Past performance doesn't guarantee future results",
+        ])
+
+        return "\n".join(lines)
+    except Exception:
+        return (
+            "## Portfolio Analysis\n"
+            "I could not complete portfolio analysis right now due to a temporary backend issue. Please try again.\n\n"
+            "⚠️ IMPORTANT DISCLAIMER:\n"
+            "- This is educational content for a SIMULATOR using fake money\n"
+            "- NOT financial advice\n"
+            "- Real crypto trading involves significant risk\n"
+            "- Never invest more than you can afford to lose\n"
+            "- Past performance doesn't guarantee future results"
+        )
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+
 def _extract_numeric(value):
     """Extract the first numeric token from mixed strings like '+1.25 USD'."""
     if isinstance(value, (int, float)):
@@ -519,10 +770,32 @@ def ask_ai():
             question=question,
             session_id=session_id
         )
+
+        response_text = result.get('response', '')
+        if _looks_like_ai_provider_error(response_text):
+            if _looks_like_portfolio_question(question):
+                response_text = _build_rule_based_portfolio_analysis(session['user_id'])
+            else:
+                response_text = (
+                    "I am temporarily unable to reach the AI provider, so here is a quick learning-first fallback:\n\n"
+                    "### Risk Management Checklist\n"
+                    "- Define max risk per trade before entry (for beginners: 1-2% of account).\n"
+                    "- Set stop-loss at invalidation, not at random round numbers.\n"
+                    "- Use position sizing so one loss cannot damage your account.\n"
+                    "- Avoid revenge trades after losses and avoid FOMO after pumps.\n"
+                    "\n"
+                    "Ask a more specific question like: \"Analyze my portfolio\" or \"Review my last losing trade\" and I will give a structured breakdown.\n\n"
+                    "⚠️ IMPORTANT DISCLAIMER:\n"
+                    "- This is educational content for a SIMULATOR using fake money\n"
+                    "- NOT financial advice\n"
+                    "- Real crypto trading involves significant risk\n"
+                    "- Never invest more than you can afford to lose\n"
+                    "- Past performance doesn't guarantee future results"
+                )
         
         return jsonify({
             'success': True,
-            'response': result['response'],
+            'response': response_text,
             'sources': result['sources'],
             'user_level': result['user_level'],
             'response_time': result['response_time_ms']

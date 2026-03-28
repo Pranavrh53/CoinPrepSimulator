@@ -508,7 +508,7 @@
         .dashboard-card {
             background: white;
             border-radius: 12px;
-            padding: 24px;
+            padding: 20px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             margin-bottom: 24px;
             border: 1px solid var(--border-color);
@@ -532,18 +532,21 @@
         /* Minimal Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
             margin-bottom: 28px;
         }
 
         .stat-card {
             background: white;
             border-radius: 12px;
-            padding: 24px;
+            padding: 18px;
             border: 1px solid var(--border-color);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+            min-height: 128px;
         }
 
         .stat-card:hover {
@@ -577,9 +580,10 @@
         }
 
         .stat-value {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 700;
             color: var(--text-primary);
+            line-height: 1.1;
         }
         
         .stat-subtext {
@@ -590,16 +594,39 @@
 
         .stat-icon {
             position: absolute;
-            right: 20px;
-            top: 20px;
-            font-size: 32px;
-            opacity: 0.1;
+            right: 14px;
+            top: 12px;
+            font-size: 28px;
+            opacity: 0.12;
             color: var(--text-primary);
+        }
+
+        .dashboard-page {
+            max-width: 1520px;
+            margin: 0 auto;
+        }
+
+        .dashboard-hero {
+            background: linear-gradient(120deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+
+        .dashboard-insights-grid {
+            display: grid;
+            grid-template-columns: 0.95fr 1.05fr;
+            gap: 16px;
+            margin-bottom: 18px;
+            align-items: start;
         }
 
         /* Clean Notification Alerts */
         #notificationsContainer {
-            margin-bottom: 28px;
+            margin-bottom: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 4px;
         }
 
         #notificationsContainer .alert {
@@ -607,12 +634,104 @@
             border: 1px solid var(--border-color);
             border-left: 3px solid var(--warning-color);
             border-radius: 8px;
-            padding: 16px;
+            padding: 10px 12px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             display: flex;
-            align-items: center;
-            gap: 14px;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .dashboard-card-alerts {
+            padding: 16px;
+            margin-bottom: 0;
+        }
+
+        .dashboard-card-alerts h3 {
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .dashboard-card-alerts .btn-sm {
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
+        .risk-analytics-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr;
+            gap: 18px;
+            margin-bottom: 6px;
+        }
+
+        .risk-metric-row {
             margin-bottom: 12px;
+        }
+
+        .risk-metric-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .risk-metric-head {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+        }
+
+        .risk-meter {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--bg-tertiary);
+            overflow: hidden;
+        }
+
+        .risk-meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0ea5e9, #2563eb);
+            border-radius: inherit;
+        }
+
+        .risk-trend-shell {
+            height: 220px;
+            background: #f8fbff;
+            border: 1px solid #dbeafe;
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .dashboard-split {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .dashboard-card-market,
+        .dashboard-card-archived {
+            margin-bottom: 0;
+        }
+
+        .dashboard-card-market .table-wrapper,
+        .dashboard-card-archived .table-wrapper {
+            max-height: 430px;
+            overflow: auto;
+        }
+
+        @media (max-width: 960px) {
+            .dashboard-insights-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-split {
+                grid-template-columns: 1fr;
+            }
+
+            .risk-analytics-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         #notificationsContainer .alert i {
@@ -1078,7 +1197,7 @@
                 </div>
             </nav>
 
-            <div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="dashboard-hero mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div>
                     <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">DASHBOARD</h1>
                     <p class="text-muted" style="margin:0;">Welcome back, {{ user.username if user and user.username else 'Trader' }}</p>
@@ -1118,6 +1237,7 @@
                     <i class="fas fa-shield-alt stat-icon"></i>
                     <div class="stat-label">RISK TOLERANCE</div>
                     <div class="stat-value">{{ user.risk_tolerance | upper if user.risk_tolerance else 'UNKNOWN' }}</div>
+                    <small class="text-muted">Score: {{ user.risk_score if user.risk_score is defined and user.risk_score is not none else 0 }}/100</small>
                 </div>
                 <div class="stat-card orange">
                     <i class="fas fa-chart-line stat-icon"></i>
@@ -1127,41 +1247,157 @@
             </div>
             {% endif %}
 
-            <!-- PRICE ALERTS -->
-            <div class="dashboard-card dashboard-card-alerts">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h3><i class="fas fa-bell"></i> PRICE ALERTS</h3>
-                    <form method="POST" action="{{ url_for('refresh_alerts') }}">
-                        <button type="submit" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-sync-alt"></i> Refresh Alerts
-                        </button>
-                    </form>
-                </div>
-                <div id="notificationsContainer">
-                    {% if triggered_alerts %}
-                        {% for alert in triggered_alerts %}
-                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                                <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #f59e0b;"></i>
-                                <div style="flex: 1;">
-                                    <strong>Alert Triggered!</strong><br>
-                                    {{ alert.coin_id | capitalize }} price is {{ alert.alert_type }} ${{ alert.target_price | round(2) }}
-                                    <small class="d-block text-muted mt-1">{{ alert.triggered_at }}</small>
+            <div class="dashboard-insights-grid">
+                <!-- PRICE ALERTS -->
+                <div class="dashboard-card dashboard-card-alerts">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3><i class="fas fa-bell"></i> PRICE ALERTS</h3>
+                        <form method="POST" action="{{ url_for('refresh_alerts') }}">
+                            <button type="submit" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-sync-alt"></i> Refresh Alerts
+                            </button>
+                        </form>
+                    </div>
+                    <div id="notificationsContainer">
+                        {% if triggered_alerts %}
+                            {% for alert in triggered_alerts[:2] %}
+                                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                                    <i class="fas fa-exclamation-triangle" style="font-size: 18px; color: #f59e0b;"></i>
+                                    <div style="flex: 1;">
+                                        <strong>Alert Triggered!</strong><br>
+                                        {{ alert.coin_id | capitalize }} price is {{ alert.alert_type }} ${{ alert.target_price | round(2) }}
+                                        <small class="d-block text-muted mt-1">{{ alert.triggered_at }}</small>
+                                    </div>
+                                    <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary">Trade Now</a>
+                                    <form method="POST" action="{{ url_for('dismiss_alert', notification_id=alert.id) }}" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
+                                    </form>
                                 </div>
-                                <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary">Trade Now</a>
-                                <form method="POST" action="{{ url_for('dismiss_alert', notification_id=alert.id) }}" style="display:inline;">
-                                    <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
-                                </form>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state" style="padding: 22px 16px;">
+                                <i class="fas fa-bell-slash" style="font-size: 30px;"></i>
+                                <h4>No active alerts</h4>
+                                <p>You don't have any triggered price alerts at the moment.</p>
                             </div>
-                        {% endfor %}
+                        {% endif %}
+                    </div>
+                    {% if triggered_alerts and (triggered_alerts|length > 2) %}
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">Showing 2 of {{ triggered_alerts|length }} triggered alerts</small>
+                            <a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline-secondary">View All</a>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="dashboard-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <h3><i class="fas fa-shield-alt"></i> RISK ANALYTICS</h3>
+                        <a href="{{ url_for('risk_quiz') }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-vial"></i> Run Assessment
+                        </a>
+                    </div>
+
+                    {% if risk_analytics and risk_analytics.available %}
+                        <div class="risk-analytics-grid">
+                            <div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="text-muted">Current profile</span>
+                                        <strong>{{ risk_analytics.risk_category }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="text-muted">Overall score</span>
+                                        <strong>{{ risk_analytics.latest_score | round(1) }} / 100</strong>
+                                    </div>
+                                </div>
+
+                                <div class="risk-metric-row">
+                                    <div class="risk-metric-head"><span>Financial Capacity</span><span>{{ risk_analytics.financial_score | round(1) }}%</span></div>
+                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.financial_score }}%"></div></div>
+                                </div>
+
+                                <div class="risk-metric-row">
+                                    <div class="risk-metric-head"><span>Investment Knowledge</span><span>{{ risk_analytics.knowledge_score | round(1) }}%</span></div>
+                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.knowledge_score }}%"></div></div>
+                                </div>
+
+                                <div class="risk-metric-row">
+                                    <div class="risk-metric-head"><span>Psychological Tolerance</span><span>{{ risk_analytics.psychological_score | round(1) }}%</span></div>
+                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.psychological_score }}%"></div></div>
+                                </div>
+
+                                <div class="risk-metric-row">
+                                    <div class="risk-metric-head"><span>Goals & Timeline</span><span>{{ risk_analytics.goals_score | round(1) }}%</span></div>
+                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.goals_score }}%"></div></div>
+                                </div>
+
+                                {% if risk_analytics.last_updated %}
+                                    <small class="text-muted d-block mt-3">Last updated: {{ risk_analytics.last_updated.strftime('%Y-%m-%d %H:%M') }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="risk-trend-shell">
+                                <canvas id="riskTrendChart"></canvas>
+                            </div>
+                        </div>
                     {% else %}
-                        <div class="empty-state">
-                            <i class="fas fa-bell-slash"></i>
-                            <h4>No active alerts</h4>
-                            <p>You don't have any triggered price alerts at the moment.</p>
+                        <div class="empty-state" style="padding: 26px 16px;">
+                            <i class="fas fa-vial" style="font-size: 32px;"></i>
+                            <h4>No comprehensive risk assessment yet</h4>
+                            <p>Take the assessment to unlock dimension-level analytics and risk trend tracking.</p>
                         </div>
                     {% endif %}
                 </div>
             </div>
+
+            {% if risk_analytics and risk_analytics.available %}
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const trendCanvas = document.getElementById('riskTrendChart');
+                    if (!trendCanvas) return;
+
+                    const labels = {{ risk_analytics.trend_labels|default([])|tojson }};
+                    const scores = {{ risk_analytics.trend_scores|default([])|tojson }};
+                    if (!labels.length || !scores.length) return;
+
+                    new Chart(trendCanvas.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Risk Score',
+                                data: scores,
+                                borderColor: '#0ea5e9',
+                                backgroundColor: 'rgba(14, 165, 233, 0.15)',
+                                fill: true,
+                                tension: 0.35,
+                                pointRadius: 3,
+                                pointHoverRadius: 5
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    min: 0,
+                                    max: 100,
+                                    ticks: {
+                                        stepSize: 20
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+            </script>
+            {% endif %}
 
             <div class="dashboard-split">
                 <!-- Market Overview -->
@@ -1390,7 +1626,7 @@
 
             <div class="tutor-bot-panel" id="tutorBotPanel" aria-live="polite">
                 <div class="tutor-bot-header">
-                    <div class="tutor-bot-title"><i class="fas fa-robot"></i> AI TUTOR BOT</div>
+                    <div class="tutor-bot-title"><i class="fas fa-robot"></i>TUTOR BOT</div>
                     <button type="button" class="tutor-bot-close" onclick="toggleTutorBot(false)" aria-label="Close chatbot">&times;</button>
                 </div>
 
@@ -2172,7 +2408,7 @@
         </div>
 
         <!-- ═══ FLOATING LEARN CHATBOT ═══ -->
-        <button class="learn-fab" id="learnFab" onclick="toggleLearnChat()" title="AI Tutor">
+        <button class="learn-fab" id="learnFab" onclick="toggleLearnChat()" title="AI Tutor" style="display:none;" aria-hidden="true" tabindex="-1">
             <i class="fas fa-graduation-cap" id="learnFabIcon"></i>
         </button>
 
@@ -5735,100 +5971,525 @@
             </nav>
 
             <div class="mb-4">
-                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">RISK QUIZ</h1>
-                <p class="text-muted" style="margin:0;">Discover your risk tolerance</p>
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">COMPREHENSIVE RISK ASSESSMENT</h1>
+                <p class="text-muted" style="margin:0;">{{ risk_question_count or questions|length }} questions across {{ risk_dimension_count or 4 }} dimensions. Estimated time: {{ estimated_minutes or 8 }} minutes.</p>
             </div>
             
             <div class="container mt-4">
-                <div class="card shadow">
-                    <div class="card-header bg-primary text-white">
-                        <h2 class="mb-0">RISK ASSESSMENT</h2>
-                    </div>
-                    <div class="card-body">
-                        {% with messages = get_flashed_messages(with_categories=true) %}
-                            {% if messages %}
-                                {% for category, message in messages %}
-                                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                        {{ message }}
-                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                    </div>
-                                {% endfor %}
-                            {% endif %}
-                        {% endwith %}
-                        
-                        <div class="alert alert-info">
-                            <h5>About This Assessment</h5>
-                            <p>This quiz will help determine your investment risk tolerance by evaluating your financial situation, investment goals, and comfort with market fluctuations. Your answers will help us recommend an investment strategy that matches your risk profile.</p>
+                <div class="risk-test-shell">
+                    <div class="risk-test-head">
+                        <div>
+                            <h2 class="mb-1">Interactive Risk Test</h2>
+                            <p class="mb-0">Answer each step. Your score updates only after completing every question.</p>
                         </div>
-                        
-                        <form method="POST" action="{{ url_for('risk_quiz') }}" class="mt-4">
-                            {% for question in questions %}
-                                <div class="card mb-4">
-                                    <div class="card-header">
-                                        <h5 class="mb-0">
-                                            {{ loop.index }}. {{ question.text }}
-                                            <small class="text-muted ms-2" data-bs-toggle="tooltip" title="{{ question.explanation }}">
-                                                <i class="bi bi-info-circle">ℹ️</i>
-                                            </small>
-                                        </h5>
-                                    </div>
-                                    <div class="card-body">
-                                        {% for option in question.options %}
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input" type="radio" name="{{ question.id }}" id="{{ question.id }}_{{ loop.index }}" value="{{ option.value }}" required>
-                                                <label class="form-check-label d-flex align-items-center" for="{{ question.id }}_{{ loop.index }}">
-                                                    {{ option.text }}
-                                                    <small class="text-muted ms-2" data-bs-toggle="tooltip" title="{{ option.explanation }}">
-                                                        <i class="bi bi-info-circle">ℹ️</i>
-                                                    </small>
-                                                </label>
-                                            </div>
-                                        {% endfor %}
-                                    </div>
+                        <div class="risk-quick-meta">
+                            <span class="risk-meta-pill"><i class="fas fa-layer-group"></i> {{ risk_dimension_count or 4 }} dimensions</span>
+                            <span class="risk-meta-pill"><i class="fas fa-stopwatch"></i> {{ estimated_minutes or 8 }} min</span>
+                        </div>
+                    </div>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                                 </div>
                             {% endfor %}
-                            
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-                                <button type="reset" class="btn btn-outline-secondary me-md-2">Reset</button>
-                                <button type="submit" class="btn btn-primary">Submit Assessment</button>
-                            </div>
-                        </form>
+                        {% endif %}
+                    {% endwith %}
+
+                    <div class="risk-progress-wrap">
+                        <div class="risk-progress-meta">
+                            <span id="riskStepText">Question 1 of {{ questions|length }}</span>
+                            <span id="riskPercentText">0%</span>
+                        </div>
+                        <div class="risk-progress-track">
+                            <div id="riskProgressFill" class="risk-progress-fill"></div>
+                        </div>
+                        <div id="riskDimensionText" class="risk-dimension-text">Financial Capacity</div>
+                        <div id="riskDimensionChips" class="risk-dimension-chips"></div>
                     </div>
+
+                    <form method="POST" action="{{ url_for('risk_quiz') }}" id="riskQuizForm" class="risk-form mt-3">
+                        <div class="risk-stage" id="riskStage">
+                            {% for question in questions %}
+                                <section
+                                    class="risk-step-card{% if loop.index0 == 0 %} active{% endif %}"
+                                    data-step-index="{{ loop.index0 }}"
+                                    data-dimension="{{ question.dimension }}"
+                                >
+                                    <div class="risk-step-topline">{{ question.dimension }}</div>
+                                    <h3 class="risk-step-title">{{ loop.index }}. {{ question.text }}</h3>
+                                    <p class="risk-step-helper">{{ question.explanation }}</p>
+
+                                    <div class="risk-options-grid">
+                                        {% for option in question.options %}
+                                            <label class="risk-option" for="{{ question.id }}_{{ loop.index }}">
+                                                <input
+                                                    class="risk-option-input"
+                                                    type="radio"
+                                                    name="{{ question.id }}"
+                                                    id="{{ question.id }}_{{ loop.index }}"
+                                                    value="{{ option.value }}"
+                                                >
+                                                <span class="risk-option-body">
+                                                    <span class="risk-option-text">{{ option.text }}</span>
+                                                    <span class="risk-option-meta">{{ option.explanation }}</span>
+                                                </span>
+                                            </label>
+                                        {% endfor %}
+                                    </div>
+                                </section>
+                            {% endfor %}
+                        </div>
+
+                        <div class="risk-nav-row">
+                            <button type="button" class="btn btn-outline-secondary" id="riskPrevBtn" disabled>
+                                <i class="fas fa-arrow-left"></i> Previous
+                            </button>
+                            <button type="button" class="btn btn-primary" id="riskNextBtn">
+                                Next <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button type="submit" class="btn btn-success" id="riskSubmitBtn" style="display:none;">
+                                Submit Complete Test <i class="fas fa-check-circle"></i>
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
-            
+
             <style>
-                .form-check-input:checked + .form-check-label {
-                    font-weight: 500;
-                    color: #0d6efd;
+                .risk-test-shell {
+                    background: linear-gradient(145deg, #0f172a 0%, #111827 100%);
+                    border: 1px solid #1e293b;
+                    border-radius: 16px;
+                    padding: 22px;
+                    box-shadow: 0 20px 35px rgba(15, 23, 42, 0.24);
                 }
-                .card {
-                    border: none;
+
+                .risk-test-head {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    gap: 14px;
+                    margin-bottom: 14px;
+                }
+
+                .risk-test-head h2 {
+                    color: #f8fafc;
+                    font-size: 24px;
+                    font-weight: 700;
+                }
+
+                .risk-test-head p {
+                    color: #94a3b8;
+                }
+
+                .risk-quick-meta {
+                    display: flex;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+
+                .risk-meta-pill {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    background: rgba(30, 41, 59, 0.85);
+                    color: #93c5fd;
+                    border: 1px solid #334155;
+                    border-radius: 999px;
+                    padding: 6px 11px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+
+                .risk-progress-wrap {
+                    background: #0b1222;
+                    border: 1px solid #24324a;
+                    border-radius: 12px;
+                    padding: 12px;
+                    margin-bottom: 10px;
+                }
+
+                .risk-progress-meta {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    color: #cbd5e1;
+                    font-weight: 600;
+                    font-size: 13px;
+                }
+
+                .risk-progress-track {
+                    margin-top: 8px;
+                    width: 100%;
+                    height: 8px;
+                    background: #1e293b;
+                    border-radius: 999px;
+                    overflow: hidden;
+                }
+
+                .risk-progress-fill {
+                    width: 0;
+                    height: 100%;
+                    background: linear-gradient(90deg, #22d3ee 0%, #38bdf8 40%, #4f46e5 100%);
+                    transition: width 280ms ease;
+                }
+
+                .risk-dimension-text {
+                    margin-top: 8px;
+                    color: #67e8f9;
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 0.2px;
+                    text-transform: uppercase;
+                }
+
+                .risk-dimension-chips {
+                    margin-top: 10px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+
+                .risk-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    border: 1px solid #334155;
+                    background: #111827;
+                    color: #94a3b8;
+                    border-radius: 999px;
+                    padding: 5px 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    transition: all 180ms ease;
+                }
+
+                .risk-chip .risk-chip-count {
+                    color: #67e8f9;
+                    font-weight: 700;
+                }
+
+                .risk-chip.is-active {
+                    border-color: #22d3ee;
+                    color: #e0f2fe;
+                    background: #0b1b2d;
+                    box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.18);
+                }
+
+                .risk-chip.is-complete {
+                    border-color: #34d399;
+                    color: #d1fae5;
+                    background: #052e2b;
+                }
+
+                .risk-stage {
+                    position: relative;
+                    min-height: 430px;
+                }
+
+                .risk-step-card {
+                    display: none;
+                    background: linear-gradient(155deg, #10192d 0%, #0f172a 100%);
+                    border: 1px solid #2a3a56;
+                    border-radius: 14px;
+                    padding: 18px;
+                    animation: riskStepIn 320ms ease;
+                }
+
+                .risk-step-card.active {
+                    display: block;
+                }
+
+                .risk-step-topline {
+                    color: #38bdf8;
+                    font-size: 12px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.3px;
+                    margin-bottom: 8px;
+                }
+
+                .risk-step-title {
+                    color: #f8fafc;
+                    font-size: 22px;
+                    font-weight: 700;
+                    line-height: 1.35;
+                    margin-bottom: 8px;
+                }
+
+                .risk-step-helper {
+                    color: #a5b4fc;
+                    font-size: 14px;
+                    margin-bottom: 16px;
+                }
+
+                .risk-options-grid {
+                    display: grid;
+                    gap: 10px;
+                }
+
+                .risk-option {
+                    display: block;
+                    cursor: pointer;
+                }
+
+                .risk-option-input {
+                    position: absolute;
+                    opacity: 0;
+                    pointer-events: none;
+                }
+
+                .risk-option-body {
+                    display: block;
+                    background: #111d33;
+                    border: 1px solid #2b3d5d;
                     border-radius: 10px;
+                    padding: 12px 14px;
+                    transition: all 180ms ease;
                 }
-                .card-header {
-                    border-radius: 10px 10px 0 0 !important;
+
+                .risk-option-body:hover {
+                    border-color: #22d3ee;
+                    transform: translateY(-1px);
+                    box-shadow: 0 8px 16px rgba(6, 182, 212, 0.18);
                 }
-                .btn-primary {
-                    padding: 0.5rem 2rem;
-                    border-radius: 5px;
+
+                .risk-option-input:checked + .risk-option-body {
+                    border-color: #38bdf8;
+                    background: linear-gradient(120deg, rgba(14, 165, 233, 0.22), rgba(79, 70, 229, 0.18));
+                    box-shadow: 0 10px 20px rgba(14, 165, 233, 0.22);
                 }
-                [data-bs-toggle="tooltip"] {
-                    cursor: help;
-                    text-decoration: none;
+
+                .risk-option-text {
+                    display: block;
+                    color: #f1f5f9;
+                    font-size: 15px;
+                    font-weight: 600;
+                    margin-bottom: 2px;
+                }
+
+                .risk-option-meta {
+                    display: block;
+                    color: #93c5fd;
+                    font-size: 12px;
+                }
+
+                .risk-nav-row {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 10px;
+                    margin-top: 14px;
+                }
+
+                .risk-nav-row .btn {
+                    min-width: 145px;
+                    font-weight: 600;
+                }
+
+                .risk-nav-row .btn:disabled {
+                    opacity: 0.45;
+                }
+
+                @keyframes riskStepIn {
+                    0% {
+                        opacity: 0;
+                        transform: translateY(8px);
+                    }
+                    100% {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .risk-test-shell {
+                        padding: 14px;
+                    }
+
+                    .risk-test-head {
+                        flex-direction: column;
+                    }
+
+                    .risk-step-title {
+                        font-size: 18px;
+                    }
+
+                    .risk-nav-row {
+                        flex-wrap: wrap;
+                    }
+
+                    .risk-nav-row .btn {
+                        flex: 1;
+                        min-width: 120px;
+                    }
                 }
             </style>
-            
+
             <script>
-                // Initialize tooltips
                 document.addEventListener('DOMContentLoaded', function() {
-                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                        return new bootstrap.Tooltip(tooltipTriggerEl);
+                    const form = document.getElementById('riskQuizForm');
+                    const steps = Array.from(document.querySelectorAll('.risk-step-card'));
+                    const progressFill = document.getElementById('riskProgressFill');
+                    const stepText = document.getElementById('riskStepText');
+                    const percentText = document.getElementById('riskPercentText');
+                    const dimensionText = document.getElementById('riskDimensionText');
+                    const prevBtn = document.getElementById('riskPrevBtn');
+                    const nextBtn = document.getElementById('riskNextBtn');
+                    const submitBtn = document.getElementById('riskSubmitBtn');
+                    const chipsWrap = document.getElementById('riskDimensionChips');
+
+                    if (!form || !steps.length) return;
+
+                    let current = 0;
+                    let allowLeave = false;
+
+                    const dimensionMeta = new Map();
+                    steps.forEach((step) => {
+                        const key = step.dataset.dimension || 'Assessment';
+                        if (!dimensionMeta.has(key)) {
+                            dimensionMeta.set(key, { total: 0, answered: 0 });
+                        }
+                        dimensionMeta.get(key).total += 1;
                     });
+
+                    const chipNodes = new Map();
+                    if (chipsWrap) {
+                        chipsWrap.innerHTML = '';
+                        dimensionMeta.forEach((meta, key) => {
+                            const chip = document.createElement('span');
+                            chip.className = 'risk-chip';
+                            chip.dataset.dimension = key;
+                            chip.innerHTML = `<span>${key}</span><span class="risk-chip-count">0/${meta.total}</span>`;
+                            chipsWrap.appendChild(chip);
+                            chipNodes.set(key, chip);
+                        });
+                    }
+
+                    function selectedInStep(stepEl) {
+                        return stepEl.querySelector('input[type="radio"]:checked');
+                    }
+
+                    function recalcDimensionProgress() {
+                        dimensionMeta.forEach((meta, key) => {
+                            meta.answered = 0;
+                            steps
+                                .filter((s) => (s.dataset.dimension || 'Assessment') === key)
+                                .forEach((s) => {
+                                    if (selectedInStep(s)) meta.answered += 1;
+                                });
+
+                            const chip = chipNodes.get(key);
+                            if (!chip) return;
+                            const count = chip.querySelector('.risk-chip-count');
+                            if (count) count.textContent = `${meta.answered}/${meta.total}`;
+
+                            chip.classList.toggle('is-complete', meta.answered === meta.total);
+                            chip.classList.toggle('is-active', key === (steps[current].dataset.dimension || 'Assessment'));
+                        });
+                    }
+
+                    function updateNavState() {
+                        const total = steps.length;
+                        const answeredCount = steps.filter((s) => selectedInStep(s)).length;
+                        const percent = Math.round((answeredCount / total) * 100);
+                        progressFill.style.width = percent + '%';
+                        stepText.textContent = `Question ${current + 1} of ${total}`;
+                        percentText.textContent = `${percent}%`;
+                        dimensionText.textContent = steps[current].dataset.dimension || 'Assessment';
+
+                        prevBtn.disabled = current === 0;
+
+                        const currentAnswered = !!selectedInStep(steps[current]);
+                        const isLast = current === total - 1;
+                        nextBtn.style.display = isLast ? 'none' : 'inline-block';
+                        submitBtn.style.display = isLast ? 'inline-block' : 'none';
+
+                        if (!isLast) {
+                            nextBtn.disabled = !currentAnswered;
+                        }
+
+                        submitBtn.disabled = answeredCount !== total;
+                        recalcDimensionProgress();
+                    }
+
+                    function showStep(index) {
+                        steps.forEach((s, i) => s.classList.toggle('active', i === index));
+                        current = index;
+                        updateNavState();
+                    }
+
+                    form.addEventListener('change', function(e) {
+                        const target = e.target;
+                        if (target && target.matches('input[type="radio"]')) {
+                            updateNavState();
+                            const isLast = current === steps.length - 1;
+                            if (!isLast) {
+                                window.clearTimeout(window.__riskAutoNextTimer);
+                                window.__riskAutoNextTimer = window.setTimeout(function() {
+                                    if (current < steps.length - 1 && selectedInStep(steps[current])) {
+                                        showStep(current + 1);
+                                    }
+                                }, 220);
+                            }
+                        }
+                    });
+
+                    nextBtn.addEventListener('click', function() {
+                        if (current < steps.length - 1 && selectedInStep(steps[current])) {
+                            showStep(current + 1);
+                        }
+                    });
+
+                    prevBtn.addEventListener('click', function() {
+                        if (current > 0) {
+                            showStep(current - 1);
+                        }
+                    });
+
+                    form.addEventListener('submit', function(e) {
+                        const unanswered = steps.find((s) => !selectedInStep(s));
+                        if (unanswered) {
+                            e.preventDefault();
+                            const missedIndex = Number(unanswered.dataset.stepIndex || 0);
+                            showStep(missedIndex);
+                            alert('Please answer all questions to complete the assessment.');
+                            return;
+                        }
+
+                        allowLeave = true;
+                    });
+
+                    window.addEventListener('beforeunload', function(e) {
+                        if (allowLeave) return;
+                        const answeredCount = steps.filter((s) => selectedInStep(s)).length;
+                        if (answeredCount > 0 && answeredCount < steps.length) {
+                            e.preventDefault();
+                            e.returnValue = '';
+                        }
+                    });
+
+                    document.querySelectorAll('a[href]').forEach(function(link) {
+                        link.addEventListener('click', function(e) {
+                            if (allowLeave) return;
+                            const answeredCount = steps.filter((s) => selectedInStep(s)).length;
+                            if (answeredCount > 0 && answeredCount < steps.length) {
+                                const confirmed = window.confirm('You have an incomplete test. Leave this page and lose progress?');
+                                if (!confirmed) {
+                                    e.preventDefault();
+                                } else {
+                                    allowLeave = true;
+                                }
+                            }
+                        });
+                    });
+
+                    showStep(0);
                 });
             </script>
-            </form>
         </div>
             
     {% elif section == 'risk_quiz_result' %}
@@ -5846,8 +6507,8 @@
             </nav>
 
             <div class="mb-4">
-                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">RISK QUIZ</h1>
-                <p class="text-muted" style="margin:0;">Discover your risk tolerance</p>
+                <h1 class="auth-title" style="text-align:left; margin-bottom:8px;">RISK ASSESSMENT RESULT</h1>
+                <p class="text-muted" style="margin:0;">Dimension-level profile and allocation guidance</p>
             </div>
             
             <div class="container mt-4">
@@ -5952,6 +6613,41 @@
                                 </div>
                             </div>
                         </div>
+
+                        {% if dimension_scores %}
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header bg-light">
+                                        <h5 class="mb-0">Risk Dimension Scores</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-2">Financial Capacity: <strong>{{ dimension_scores.financial | round(1) }}%</strong></p>
+                                        <div class="progress mb-3"><div class="progress-bar" style="width: {{ dimension_scores.financial }}%"></div></div>
+
+                                        <p class="mb-2">Investment Knowledge: <strong>{{ dimension_scores.knowledge | round(1) }}%</strong></p>
+                                        <div class="progress mb-3"><div class="progress-bar bg-success" style="width: {{ dimension_scores.knowledge }}%"></div></div>
+
+                                        <p class="mb-2">Psychological Tolerance: <strong>{{ dimension_scores.psychological | round(1) }}%</strong></p>
+                                        <div class="progress mb-3"><div class="progress-bar bg-warning" style="width: {{ dimension_scores.psychological }}%"></div></div>
+
+                                        <p class="mb-2">Goals & Timeline: <strong>{{ dimension_scores.goals | round(1) }}%</strong></p>
+                                        <div class="progress"><div class="progress-bar bg-info" style="width: {{ dimension_scores.goals }}%"></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header bg-light">
+                                        <h5 class="mb-0">Risk Score Trend</h5>
+                                    </div>
+                                    <div class="card-body" style="height: 320px;">
+                                        <canvas id="riskHistoryChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                         
                         <div class="mt-4">
                             <button class="btn btn-outline-primary" onclick="window.print()">
@@ -6031,6 +6727,42 @@
                             }
                         }
                     });
+
+                    const trendCanvas = document.getElementById('riskHistoryChart');
+                    if (trendCanvas) {
+                        const trendCtx = trendCanvas.getContext('2d');
+                        const trendLabels = {{ trend_labels|default([])|tojson }};
+                        const trendScores = {{ trend_scores|default([])|tojson }};
+
+                        if (trendLabels.length > 0 && trendScores.length > 0) {
+                            new Chart(trendCtx, {
+                                type: 'line',
+                                data: {
+                                    labels: trendLabels,
+                                    datasets: [{
+                                        label: 'Risk Score',
+                                        data: trendScores,
+                                        borderColor: '#2563eb',
+                                        backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                                        fill: true,
+                                        tension: 0.35,
+                                        pointRadius: 4,
+                                        pointHoverRadius: 5
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    scales: {
+                                        y: {
+                                            min: 0,
+                                            max: 100
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
                 });
             </script>
         </div>
@@ -6144,21 +6876,552 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            <h3>ADD ACHIEVEMENT</h3>
-            <form method="POST" action="{{ url_for('update_achievements') }}">
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" name="achievement" placeholder="Achievement name" required>
-                    <button type="submit" class="btn btn-primary">Add</button>
+
+            <div class="ach-shell">
+                <div class="ach-head-row">
+                    <div>
+                        <h2 class="ach-heading">Milestone Progress</h2>
+                        <p class="ach-sub">Unlocked: <strong>{{ unlocked_count or 0 }}/{{ total_achievements or 0 }}</strong></p>
+                    </div>
+                    <div class="ach-score-card">
+                        <span>My Rank</span>
+                        <strong>{% if my_rank %}#{{ my_rank.rank }}{% else %}-{% endif %}</strong>
+                        <small>{% if my_rank %}Score {{ my_rank.score }}{% else %}No rank yet{% endif %}</small>
+                    </div>
                 </div>
-            </form>
-            <ul class="list-group">
-                {% if achievements %}
-                    {% for achievement in achievements %}
-                        <li class="list-group-item">{{ achievement }}</li>
-                    {% endfor %}
-                {% endif %}
-            </ul>
+
+                <div class="ach-metrics-grid">
+                    <div class="ach-metric-item">
+                        <div class="label">Net Profit</div>
+                        <div class="value {% if user_metrics.total_profit >= 0 %}is-pos{% else %}is-neg{% endif %}">
+                            {% if user_metrics.total_profit >= 0 %}+{% endif %}${{ user_metrics.total_profit | round(2) }}
+                        </div>
+                    </div>
+                    <div class="ach-metric-item">
+                        <div class="label">Closed Trades</div>
+                        <div class="value">{{ user_metrics.closed_trades }}</div>
+                    </div>
+                    <div class="ach-metric-item">
+                        <div class="label">Win Rate</div>
+                        <div class="value">{{ user_metrics.win_rate }}%</div>
+                    </div>
+                    <div class="ach-metric-item">
+                        <div class="label">Risk Score</div>
+                        <div class="value">{{ user_metrics.risk_score }}</div>
+                    </div>
+                    <div class="ach-metric-item">
+                        <div class="label">Coin Diversity</div>
+                        <div class="value">{{ user_metrics.diversity }}</div>
+                    </div>
+                </div>
+
+                <div class="ach-grid">
+                    {% if achievement_cards %}
+                        {% for card in achievement_cards %}
+                            {% set progress_pct = ((card.progress / card.target) * 100) if card.target else 0 %}
+                            <div class="ach-card {% if card.unlocked %}unlocked{% else %}locked{% endif %}">
+                                <div class="ach-card-top">
+                                    <div class="ach-icon"><i class="fas {{ card.icon }}"></i></div>
+                                    <div>
+                                        <h4>{{ card.title }}</h4>
+                                        <p>{{ card.description }}</p>
+                                    </div>
+                                    <div class="ach-status">
+                                        {% if card.unlocked %}
+                                            <i class="fas fa-trophy"></i>
+                                        {% else %}
+                                            <i class="fas fa-lock"></i>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="ach-progress-row">
+                                    <small>{{ card.progress | round(1) }} / {{ card.target }}</small>
+                                    <small>{{ progress_pct | round(0) }}%</small>
+                                </div>
+                                <div class="ach-progress-track">
+                                    <span class="ach-progress-fill" style="width: {{ progress_pct }}%;"></span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <div class="ach-inline-form">
+                    <h3>Manual Achievement Tag</h3>
+                    <form method="POST" action="{{ url_for('update_achievements') }}">
+                        <div class="input-group mb-0">
+                            <input type="text" class="form-control" name="achievement" placeholder="Example: Research Pro" required>
+                            <button type="submit" class="btn btn-primary">Add</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="leader-shell mt-4">
+                    <div class="leader-top">
+                        <div>
+                            <h3><i class="fas fa-crown"></i> Global Leaderboard</h3>
+                            <p>Ranking among {{ leaderboard_count or 0 }} users by weighted performance score.</p>
+                        </div>
+                    </div>
+
+                    <div class="leader-factors">
+                        {% for factor in score_factors %}
+                            <span class="factor-chip">{{ factor }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <div class="table-wrapper leader-table-wrap">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>User</th>
+                                    <th>Score</th>
+                                    <th>Profit</th>
+                                    <th>Win Rate</th>
+                                    <th>Trades</th>
+                                    <th>Risk</th>
+                                    <th>Diversity</th>
+                                    <th>Achievements</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if leaderboard %}
+                                    {% for row in leaderboard %}
+                                        <tr {% if row.user_id == session.user_id %}class="leader-me"{% endif %}>
+                                            <td><strong>#{{ row.rank }}</strong></td>
+                                            <td>{{ row.username }}</td>
+                                            <td><strong>{{ row.score }}</strong></td>
+                                            <td class="{% if row.total_profit >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                                {% if row.total_profit >= 0 %}+{% endif %}${{ row.total_profit | round(2) }}
+                                            </td>
+                                            <td>{{ row.win_rate }}%</td>
+                                            <td>{{ row.closed_trades }}</td>
+                                            <td>{{ row.risk_score }}</td>
+                                            <td>{{ row.diversity }}</td>
+                                            <td>{{ row.achievement_count }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="9" class="text-center text-muted py-4">No leaderboard data yet</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .ach-shell {
+                    display: block;
+                }
+
+                .ach-head-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 16px;
+                    margin-bottom: 14px;
+                }
+
+                .ach-heading {
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                }
+
+                .ach-sub {
+                    margin: 6px 0 0;
+                    color: var(--text-secondary);
+                }
+
+                .ach-score-card {
+                    min-width: 150px;
+                    background: #0f172a;
+                    color: #e2e8f0;
+                    border: 1px solid #1e293b;
+                    border-radius: 12px;
+                    padding: 10px 14px;
+                    text-align: right;
+                }
+
+                .ach-score-card span {
+                    font-size: 11px;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 0.4px;
+                }
+
+                .ach-score-card strong {
+                    display: block;
+                    font-size: 28px;
+                    line-height: 1;
+                    color: #22d3ee;
+                    margin-top: 2px;
+                }
+
+                .ach-score-card small {
+                    color: #93c5fd;
+                    font-weight: 600;
+                }
+
+                .ach-metrics-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                    gap: 10px;
+                    margin-bottom: 14px;
+                }
+
+                .ach-metric-item {
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 10px;
+                    padding: 10px;
+                }
+
+                .ach-metric-item .label {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.4px;
+                    color: #64748b;
+                    margin-bottom: 4px;
+                }
+
+                .ach-metric-item .value {
+                    font-size: 21px;
+                    font-weight: 700;
+                    color: #0f172a;
+                    line-height: 1.1;
+                }
+
+                .ach-metric-item .value.is-pos {
+                    color: #059669;
+                }
+
+                .ach-metric-item .value.is-neg {
+                    color: #dc2626;
+                }
+
+                .ach-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 12px;
+                }
+
+                .ach-card {
+                    border: 1px solid #e2e8f0;
+                    background: #ffffff;
+                    border-radius: 12px;
+                    padding: 14px;
+                    transition: all 0.2s ease;
+                }
+
+                .ach-card.unlocked {
+                    border-color: #14b8a6;
+                    box-shadow: 0 0 0 1px rgba(20, 184, 166, 0.15), 0 8px 18px rgba(20, 184, 166, 0.12);
+                }
+
+                .ach-card.locked {
+                    opacity: 0.86;
+                }
+
+                .ach-card-top {
+                    display: grid;
+                    grid-template-columns: auto 1fr auto;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 10px;
+                }
+
+                .ach-icon {
+                    width: 38px;
+                    height: 38px;
+                    border-radius: 9px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #0f172a;
+                    color: #22d3ee;
+                }
+
+                .ach-card h4 {
+                    margin: 0;
+                    font-size: 18px;
+                    color: #0f172a;
+                    font-weight: 700;
+                }
+
+                .ach-card p {
+                    margin: 2px 0 0;
+                    color: #64748b;
+                    font-size: 13px;
+                }
+
+                .ach-status {
+                    font-size: 16px;
+                    color: #0ea5e9;
+                }
+
+                .ach-progress-row {
+                    display: flex;
+                    justify-content: space-between;
+                    color: #64748b;
+                    font-weight: 600;
+                    font-size: 11px;
+                    margin-bottom: 6px;
+                }
+
+                .ach-progress-track {
+                    width: 100%;
+                    height: 6px;
+                    border-radius: 999px;
+                    background: #e2e8f0;
+                    overflow: hidden;
+                }
+
+                .ach-progress-fill {
+                    display: block;
+                    height: 100%;
+                    background: linear-gradient(90deg, #14b8a6, #22d3ee);
+                }
+
+                .ach-inline-form {
+                    margin-top: 16px;
+                    padding: 12px;
+                    border: 1px dashed #cbd5e1;
+                    border-radius: 10px;
+                    background: #f8fafc;
+                }
+
+                .ach-inline-form h3 {
+                    margin-bottom: 10px;
+                    font-size: 14px;
+                    letter-spacing: 0.3px;
+                    text-transform: uppercase;
+                    color: #334155;
+                }
+
+                .leader-shell {
+                    border: 1px solid #e2e8f0;
+                    border-radius: 12px;
+                    background: #ffffff;
+                    padding: 14px;
+                }
+
+                .leader-top h3 {
+                    margin: 0;
+                    color: #0f172a;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .leader-top p {
+                    margin: 4px 0 0;
+                    color: #64748b;
+                }
+
+                .leader-factors {
+                    margin-top: 10px;
+                    margin-bottom: 10px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+
+                .factor-chip {
+                    border: 1px solid #cbd5e1;
+                    background: #f8fafc;
+                    color: #334155;
+                    border-radius: 999px;
+                    padding: 5px 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+
+                .leader-table-wrap {
+                    margin-top: 6px;
+                    max-height: 420px;
+                    overflow: auto;
+                }
+
+                .leader-me {
+                    background: rgba(34, 211, 238, 0.08);
+                }
+
+                @media (max-width: 780px) {
+                    .ach-head-row {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+
+                    .ach-score-card {
+                        width: 100%;
+                        text-align: left;
+                    }
+                }
+            </style>
         </div>
+    {% endif %}
+
+    {% if section not in ['login', 'register', 'verify', 'dashboard'] %}
+        <button
+            type="button"
+            class="coach-fab"
+            id="btnCoachFab"
+            onclick="toggleSharedTutorBot(true)"
+            title="Open AI Tutor"
+            aria-label="Open AI Tutor"
+        >
+            <i class="fas fa-robot"></i>
+        </button>
+
+        <div class="tutor-bot-panel" id="tutorBotPanel" aria-live="polite">
+            <div class="tutor-bot-header">
+                <div class="tutor-bot-title"><i class="fas fa-robot"></i> AI TUTOR BOT</div>
+                <button type="button" class="tutor-bot-close" onclick="toggleSharedTutorBot(false)" aria-label="Close chatbot">&times;</button>
+            </div>
+
+            <div class="tutor-bot-messages" id="tutorBotMessages">
+                <div class="tutor-bot-message assistant">Hi! I am your AI tutor. Ask me about risk management, stop-loss, FOMO, or your recent trade mistakes.</div>
+            </div>
+
+            <div class="tutor-bot-typing" id="tutorBotTyping" style="display:none;">Typing...</div>
+            <div class="tutor-bot-error" id="tutorBotError"></div>
+
+            <div class="tutor-bot-suggestions">
+                <button type="button" class="tutor-bot-chip" onclick="sendSharedTutorSuggestion('How do I use stop loss correctly?')">Stop Loss</button>
+                <button type="button" class="tutor-bot-chip" onclick="sendSharedTutorSuggestion('Why did my last trade fail?')">Trade Review</button>
+                <button type="button" class="tutor-bot-chip" onclick="sendSharedTutorSuggestion('How can I avoid FOMO entries?')">Avoid FOMO</button>
+                <button type="button" class="tutor-bot-chip" onclick="sendSharedTutorSuggestion('What risk per trade should I use as a beginner?')">Position Sizing</button>
+            </div>
+
+            <div class="tutor-bot-input-row">
+                <input
+                    type="text"
+                    id="tutorBotInput"
+                    class="tutor-bot-input"
+                    maxlength="500"
+                    placeholder="Ask your trading question..."
+                    onkeydown="if (event.key === 'Enter') { event.preventDefault(); sendSharedTutorMessage(); }"
+                >
+                <button type="button" id="tutorBotSend" class="tutor-bot-send" onclick="sendSharedTutorMessage()">SEND</button>
+            </div>
+        </div>
+
+        <script>
+        const sharedTutorBotSessionId = `global_bot_${Date.now()}`;
+        let sharedTutorBotLoading = false;
+
+        function toggleSharedTutorBot(forceOpen) {
+            const panel = document.getElementById('tutorBotPanel');
+            if (!panel) return;
+
+            const openState = typeof forceOpen === 'boolean' ? forceOpen : !panel.classList.contains('open');
+            panel.classList.toggle('open', openState);
+            if (openState) {
+                const input = document.getElementById('tutorBotInput');
+                if (input) input.focus();
+                scrollSharedTutorBotToBottom();
+            }
+        }
+
+        function escapeTutorHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function addSharedTutorMessage(role, text) {
+            const messages = document.getElementById('tutorBotMessages');
+            if (!messages) return;
+
+            const messageEl = document.createElement('div');
+            messageEl.className = `tutor-bot-message ${role}`;
+            messageEl.innerHTML = escapeTutorHtml(text);
+            messages.appendChild(messageEl);
+            scrollSharedTutorBotToBottom();
+        }
+
+        function scrollSharedTutorBotToBottom() {
+            const messages = document.getElementById('tutorBotMessages');
+            if (messages) {
+                messages.scrollTop = messages.scrollHeight;
+            }
+        }
+
+        function sendSharedTutorSuggestion(text) {
+            const input = document.getElementById('tutorBotInput');
+            if (input) input.value = text;
+            sendSharedTutorMessage();
+        }
+
+        async function sendSharedTutorMessage() {
+            if (sharedTutorBotLoading) return;
+
+            const input = document.getElementById('tutorBotInput');
+            const sendBtn = document.getElementById('tutorBotSend');
+            const typingEl = document.getElementById('tutorBotTyping');
+            const errorEl = document.getElementById('tutorBotError');
+
+            if (!input || !sendBtn || !typingEl || !errorEl) return;
+
+            const question = (input.value || '').trim();
+            if (!question) return;
+
+            errorEl.textContent = '';
+            addSharedTutorMessage('user', question);
+            input.value = '';
+
+            sharedTutorBotLoading = true;
+            sendBtn.disabled = true;
+            typingEl.style.display = 'block';
+
+            try {
+                const response = await fetch('/learning/api/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question, session_id: sharedTutorBotSessionId })
+                });
+
+                const rawText = await response.text();
+                let data = null;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (parseError) {
+                    const statusLabel = response.status ? `HTTP ${response.status}` : 'Unknown error';
+                    throw new Error(`AI tutor endpoint returned invalid JSON (${statusLabel}).`);
+                }
+
+                if (!response.ok || !data || !data.success) {
+                    throw new Error((data && data.error) || 'Failed to get response from AI tutor.');
+                }
+
+                addSharedTutorMessage('assistant', data.response || 'No response generated.');
+            } catch (error) {
+                errorEl.textContent = error && error.message ? error.message : 'Unable to connect to AI tutor.';
+            } finally {
+                sharedTutorBotLoading = false;
+                sendBtn.disabled = false;
+                typingEl.style.display = 'none';
+                input.focus();
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                toggleSharedTutorBot(false);
+            }
+        });
+        </script>
     {% endif %}
 
     <script>
