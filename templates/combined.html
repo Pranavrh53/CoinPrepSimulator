@@ -457,449 +457,676 @@
         }
 
         /* Professional Dashboard Styles */
-        .container { 
-            max-width: 1400px; 
-            margin: 0 auto;
-            padding: 24px;
-        }
-        
-        /* Clean Navbar */
-        .navbar {
-            background: white !important;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            margin-bottom: 28px;
-            border: 1px solid var(--border-color);
-        }
-
-        .navbar-brand {
-            font-weight: 700;
-            color: var(--text-primary) !important;
-            font-size: 20px;
-        }
-
-        .navbar-brand i {
-            color: var(--primary-color);
-            margin-right: 8px;
-        }
-
-        .navbar-nav .nav-link {
-            color: var(--text-secondary) !important;
-            font-weight: 500;
-            padding: 8px 14px !important;
-            border-radius: 6px;
-            transition: all 0.2s;
-            margin: 0 2px;
-            font-size: 14px;
-        }
-
-        .navbar-nav .nav-link:hover {
-            background: var(--bg-tertiary);
-            color: var(--text-primary) !important;
-        }
-
-        .navbar-nav .nav-link i {
-            margin-right: 6px;
-            font-size: 13px;
-        }
-
-        /* Clean Dashboard Cards */
-        .dashboard-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin-bottom: 24px;
-            border: 1px solid var(--border-color);
-        }
-
-        .dashboard-card h3 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .dashboard-card h3 i {
-            color: var(--primary-color);
-            font-size: 18px;
-        }
-
-        /* Minimal Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 14px;
-            margin-bottom: 28px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 18px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            transition: all 0.2s;
-            position: relative;
-            overflow: hidden;
-            min-height: 128px;
-        }
-
-        .stat-card:hover {
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transform: translateY(-2px);
-        }
-
-        .stat-card.green {
-            border-left: 3px solid var(--success-color);
-        }
-
-        .stat-card.orange {
-            border-left: 3px solid var(--warning-color);
-        }
-
-        .stat-card.pink {
-            border-left: 3px solid #ec4899;
-        }
-
-        .stat-card.blue {
-            border-left: 3px solid var(--primary-color);
-        }
-
-        .stat-label {
-            font-size: 13px;
-            color: var(--text-secondary);
-            font-weight: 500;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--text-primary);
-            line-height: 1.1;
-        }
-        
-        .stat-subtext {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 4px;
-        }
-
-        .stat-icon {
-            position: absolute;
-            right: 14px;
-            top: 12px;
-            font-size: 28px;
-            opacity: 0.12;
-            color: var(--text-primary);
-        }
-
         .dashboard-page {
+            --dash-bg: #070d1a;
+            --dash-panel: #0b1527;
+            --dash-panel-2: #101a2f;
+            --dash-border: #173052;
+            --dash-text: #d9f6ff;
+            --dash-muted: #7e9bb6;
+            --dash-cyan: #24d7e8;
+            --dash-green: #14de8d;
+            --dash-magenta: #cf5bff;
+            --dash-yellow: #f3bc37;
+            --dash-red: #ff5f76;
             max-width: 1520px;
             margin: 0 auto;
+            color: var(--dash-text);
         }
 
-        .dashboard-hero {
-            background: linear-gradient(120deg, #ffffff 0%, #f8fbff 100%);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 14px 16px;
+        body:has(.dashboard-page) {
+            background: radial-gradient(circle at 8% -8%, #0f2944 0%, #070d1a 45%), #070d1a;
+            color: var(--dash-text);
         }
 
-        .dashboard-insights-grid {
+        .dashboard-page .navbar {
+            background: linear-gradient(180deg, #0b1629 0%, #091324 100%) !important;
+            border: 1px solid var(--dash-border);
+            border-radius: 8px;
+            box-shadow: 0 12px 26px rgba(1, 7, 16, 0.45);
+            padding: 0.75rem 1rem;
+            margin-bottom: 14px;
+        }
+
+        .dashboard-page .navbar-brand {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 13px;
+            color: var(--dash-green) !important;
+            letter-spacing: 0.08em;
+        }
+
+        .dashboard-page .navbar-brand i {
+            margin-right: 8px;
+            color: var(--dash-cyan);
+        }
+
+        .dashboard-page .navbar-nav .nav-link {
+            color: var(--dash-muted) !important;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 7px 10px !important;
+            margin: 0 1px;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .dashboard-page .navbar-nav .nav-link.active {
+            background: rgba(36, 215, 232, 0.12);
+            color: var(--dash-cyan) !important;
+            border-color: rgba(36, 215, 232, 0.35);
+        }
+
+        .dashboard-page .navbar-nav .nav-link:hover {
+            color: var(--dash-text) !important;
+            border-color: rgba(126, 155, 182, 0.35);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .dashboard-page .dashboard-hero {
+            background: linear-gradient(180deg, #0b1527 0%, #0a1323 100%);
+            border: 1px solid var(--dash-border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 12px !important;
+        }
+
+        .dashboard-page .auth-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            color: var(--dash-cyan);
+        }
+
+        .dashboard-page .text-muted {
+            color: var(--dash-muted) !important;
+        }
+
+        .dashboard-page .btn-coach-open {
+            background: rgba(20, 222, 141, 0.14);
+            color: var(--dash-green);
+            border: 1px solid rgba(20, 222, 141, 0.4);
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 6px;
+        }
+
+        .dashboard-page .btn-coach-open:hover {
+            background: rgba(20, 222, 141, 0.24);
+            color: #dffff1;
+            border-color: rgba(20, 222, 141, 0.75);
+        }
+
+        .dashboard-page .stats-grid {
             display: grid;
-            grid-template-columns: 0.95fr 1.05fr;
-            gap: 16px;
-            margin-bottom: 18px;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-page .stat-card {
+            background: linear-gradient(180deg, #0c182c 0%, #0b1629 100%);
+            border: 1px solid var(--dash-border);
+            border-radius: 8px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+            padding: 14px 14px 12px;
+            min-height: 0;
+        }
+
+        .dashboard-page .stat-card.green { border-left: 3px solid var(--dash-green); }
+        .dashboard-page .stat-card.blue { border-left: 3px solid var(--dash-cyan); }
+        .dashboard-page .stat-card.pink { border-left: 3px solid var(--dash-magenta); }
+        .dashboard-page .stat-card.orange { border-left: 3px solid var(--dash-yellow); }
+
+        .dashboard-page .stat-label {
+            color: var(--dash-muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .dashboard-page .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 29px;
+            line-height: 1;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #ecf5ff;
+        }
+
+        .dashboard-page .stat-card.green .stat-value { color: var(--dash-green); }
+        .dashboard-page .stat-card.blue .stat-value { color: var(--dash-cyan); }
+        .dashboard-page .stat-card.pink .stat-value { color: var(--dash-magenta); }
+        .dashboard-page .stat-card.orange .stat-value { color: var(--dash-yellow); }
+
+        .dashboard-page .stat-icon {
+            color: #78a5c7;
+            opacity: 0.22;
+            font-size: 22px;
+            right: 10px;
+            top: 10px;
+        }
+
+        .dashboard-page .dashboard-card {
+            background: linear-gradient(180deg, var(--dash-panel) 0%, #0a1324 100%);
+            border: 1px solid var(--dash-border);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 12px;
+            box-shadow: 0 8px 18px rgba(1, 8, 16, 0.35);
+        }
+
+        .dashboard-page .dashboard-card h3 {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            letter-spacing: 0.13em;
+            color: var(--dash-text);
+            margin-bottom: 12px;
+        }
+
+        .dashboard-page .dashboard-card h3 i {
+            color: var(--dash-cyan);
+            font-size: 12px;
+        }
+
+        .dashboard-page .dashboard-insights-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 12px;
+            margin-bottom: 12px;
             align-items: start;
         }
 
-        /* Clean Notification Alerts */
-        #notificationsContainer {
-            margin-bottom: 10px;
+        .dashboard-page .dashboard-card-alerts {
+            min-height: 332px;
+            margin-bottom: 0;
+        }
+
+        .dashboard-page .dashboard-card-alerts .mb-4 {
+            margin-bottom: 10px !important;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--dash-border);
+        }
+
+        .dashboard-page #notificationsContainer {
+            margin-bottom: 8px;
             max-height: 250px;
             overflow-y: auto;
             padding-right: 4px;
         }
 
-        #notificationsContainer .alert {
-            background: white;
-            border: 1px solid var(--border-color);
-            border-left: 3px solid var(--warning-color);
-            border-radius: 8px;
-            padding: 10px 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        .dashboard-page #notificationsContainer .alert {
+            background: rgba(243, 188, 55, 0.08);
+            border: 1px solid rgba(243, 188, 55, 0.35);
+            border-left: 3px solid var(--dash-yellow);
+            border-radius: 6px;
+            color: #f2fbff;
+            padding: 10px;
             display: flex;
             align-items: flex-start;
             gap: 10px;
             margin-bottom: 8px;
         }
 
-        .dashboard-card-alerts {
-            padding: 16px;
-            margin-bottom: 0;
+        .dashboard-page #notificationsContainer .alert strong {
+            color: #fff2c8;
+            font-weight: 700;
         }
 
-        .dashboard-card-alerts h3 {
-            margin-bottom: 8px;
-            font-size: 16px;
-        }
-
-        .dashboard-card-alerts .btn-sm {
-            padding: 6px 10px;
-            font-size: 12px;
-        }
-
-        .risk-analytics-grid {
-            display: grid;
-            grid-template-columns: 1.1fr 1fr;
-            gap: 18px;
-            margin-bottom: 6px;
-        }
-
-        .risk-metric-row {
-            margin-bottom: 12px;
-        }
-
-        .risk-metric-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .risk-metric-head {
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px;
-            margin-bottom: 6px;
-            color: var(--text-secondary);
-        }
-
-        .risk-meter {
-            width: 100%;
-            height: 8px;
-            border-radius: 999px;
-            background: var(--bg-tertiary);
-            overflow: hidden;
-        }
-
-        .risk-meter-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #0ea5e9, #2563eb);
-            border-radius: inherit;
-        }
-
-        .risk-trend-shell {
-            height: 220px;
-            background: #f8fbff;
-            border: 1px solid #dbeafe;
-            border-radius: 12px;
-            padding: 12px;
-        }
-
-        .dashboard-split {
+        .dashboard-page .risk-analytics-grid {
             display: grid;
             grid-template-columns: 1.2fr 0.8fr;
-            gap: 16px;
+            gap: 12px;
+            margin-bottom: 2px;
+        }
+
+        .dashboard-page .risk-metric-head {
+            color: var(--dash-muted);
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+
+        .dashboard-page .risk-meter {
+            background: #0a1322;
+            border: 1px solid #113152;
+            height: 7px;
+            border-radius: 999px;
+        }
+
+        .dashboard-page .risk-meter-fill {
+            display: block;
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #1acbe0 0%, #14de8d 100%);
+            box-shadow: 0 0 8px rgba(36, 215, 232, 0.35);
+            transition: width 0.35s ease;
+        }
+
+        .dashboard-page .risk-meter-fill.low {
+            background: linear-gradient(90deg, #ff7a59 0%, #ff4d6d 100%);
+            box-shadow: 0 0 8px rgba(255, 90, 90, 0.35);
+        }
+
+        .dashboard-page .risk-meter-fill.mid {
+            background: linear-gradient(90deg, #f5b13d 0%, #ffd966 100%);
+            box-shadow: 0 0 8px rgba(245, 177, 61, 0.3);
+        }
+
+        .dashboard-page .risk-meter-fill.high {
+            background: linear-gradient(90deg, #1acbe0 0%, #14de8d 100%);
+        }
+
+        .dashboard-page .risk-trend-shell {
+            height: 220px;
+            background: linear-gradient(180deg, #0a1222 0%, #0a1326 100%);
+            border: 1px solid #113152;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .dashboard-page .dashboard-split {
+            display: grid;
+            grid-template-columns: 1.35fr 1fr;
+            gap: 12px;
             align-items: start;
         }
 
-        .dashboard-card-market,
-        .dashboard-card-archived {
+        .dashboard-page .dashboard-card-market,
+        .dashboard-page .dashboard-card-archived {
             margin-bottom: 0;
         }
 
-        .dashboard-card-market .table-wrapper,
-        .dashboard-card-archived .table-wrapper {
-            max-height: 430px;
+        .dashboard-page .dashboard-card-market .table-wrapper,
+        .dashboard-page .dashboard-card-archived .table-wrapper {
+            max-height: 432px;
             overflow: auto;
         }
 
-        @media (max-width: 960px) {
-            .dashboard-insights-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .dashboard-split {
-                grid-template-columns: 1fr;
-            }
-
-            .risk-analytics-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        #notificationsContainer .alert i {
-            color: var(--warning-color);
-        }
-
-        #notificationsContainer .alert strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        /* Clean Table */
-        .table-wrapper {
-            background: white;
-            border-radius: 12px;
+        .dashboard-page .table-wrapper {
+            background: var(--dash-panel-2);
+            border: 1px solid var(--dash-border);
+            border-radius: 6px;
             overflow: hidden;
-            border: 1px solid var(--border-color);
         }
 
-        .table {
+        .dashboard-page .table {
             margin-bottom: 0;
             background: transparent;
+            color: var(--dash-text);
         }
 
-        .table thead th {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            font-weight: 600;
+        .dashboard-page .table thead th {
+            background: #0a1322;
+            color: var(--dash-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.16em;
+            font-size: 10px;
+            border-bottom: 1px solid var(--dash-border);
+            border-top: none;
+            border-left: none;
+            border-right: none;
+            padding: 11px 12px;
+            font-weight: 700;
+        }
+
+        .dashboard-page .table tbody tr {
+            border-bottom: 1px solid rgba(23, 48, 82, 0.45);
+            transition: background 0.18s ease;
+        }
+
+        .dashboard-page .table tbody tr:hover {
+            background: rgba(36, 215, 232, 0.05);
+        }
+
+        .dashboard-page .table tbody td {
+            color: #b7d5ea;
             font-size: 12px;
-            padding: 16px;
+            padding: 10px 12px;
             border: none;
-        }
-
-        .table tbody tr {
-            transition: background 0.2s;
-            border-bottom: 1px solid var(--bg-tertiary);
-        }
-
-        .table tbody tr:hover {
-            background: var(--bg-secondary);
-        }
-
-        .table tbody td {
-            padding: 16px;
             vertical-align: middle;
-            font-weight: 500;
-            color: var(--text-secondary);
-            font-size: 14px;
         }
 
-        .table tbody td:first-child {
-            font-weight: 600;
-            color: var(--text-primary);
+        .dashboard-page .table tbody td strong {
+            color: #e6f5ff;
         }
 
-        .price-positive {
-            color: var(--success-color);
-            font-weight: 600;
+        .dashboard-page .price-positive {
+            color: var(--dash-green);
+            font-weight: 700;
         }
 
-        .price-negative {
-            color: var(--danger-color);
-            font-weight: 600;
+        .dashboard-page .price-negative {
+            color: var(--dash-red);
+            font-weight: 700;
         }
 
-        /* Clean Buttons */
-        .btn-sm {
-            padding: 8px 16px;
+        .dashboard-page .btn-sm {
+            font-size: 11px;
+            font-weight: 700;
             border-radius: 6px;
-            font-weight: 600;
-            font-size: 13px;
-            transition: all 0.2s;
-            border: none;
+            padding: 6px 10px;
+            border: 1px solid transparent;
+            box-shadow: none;
         }
 
-        .btn-info {
-            background: var(--primary-color);
-            color: white;
+        .dashboard-page .btn-info {
+            background: rgba(36, 215, 232, 0.14);
+            border-color: rgba(36, 215, 232, 0.5);
+            color: var(--dash-cyan);
         }
 
-        .btn-info:hover {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-            color: white;
+        .dashboard-page .btn-info:hover {
+            background: rgba(36, 215, 232, 0.22);
+            border-color: rgba(36, 215, 232, 0.85);
+            color: #eaffff;
+            transform: none;
         }
 
-        .btn-primary {
-            background: var(--success-color);
-            border: none;
-            color: white;
+        .dashboard-page .btn-primary {
+            background: rgba(20, 222, 141, 0.14);
+            border-color: rgba(20, 222, 141, 0.45);
+            color: var(--dash-green);
         }
 
-        .btn-primary:hover {
-            background: #059669;
-            transform: translateY(-1px);
+        .dashboard-page .btn-primary:hover {
+            background: rgba(20, 222, 141, 0.24);
+            border-color: rgba(20, 222, 141, 0.8);
+            color: #edfff8;
+            transform: none;
         }
 
-        .btn-secondary {
-            background: var(--secondary-color);
-            border: none;
-            color: white;
+        .dashboard-page .btn-secondary {
+            background: rgba(126, 155, 182, 0.12);
+            border-color: rgba(126, 155, 182, 0.4);
+            color: #d2e5f3;
         }
 
-        .btn-secondary:hover {
-            background: #475569;
-            transform: translateY(-1px);
+        .dashboard-page .btn-secondary:hover {
+            background: rgba(126, 155, 182, 0.2);
+            border-color: rgba(126, 155, 182, 0.7);
+            color: #eff8ff;
+            transform: none;
         }
 
-        /* Clean Chart Container */
-        .chart-container {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin-top: 24px;
-            height: 450px;
-            position: relative;
+        .dashboard-page .chart-container {
+            background: linear-gradient(180deg, #0b1527 0%, #091324 100%);
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid var(--dash-border);
+            box-shadow: 0 8px 18px rgba(1, 8, 16, 0.35);
+            margin-top: 12px;
+            height: 420px;
         }
 
-        .chart-container::before {
-            content: 'Select a cryptocurrency to view historical data';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: var(--text-muted);
-            font-size: 15px;
-            font-weight: 500;
+        .dashboard-page .chart-container::before {
+            color: var(--dash-muted);
+            font-size: 12px;
+            letter-spacing: 0.04em;
+        }
+
+        .dashboard-page .empty-state {
             text-align: center;
-            z-index: 0;
-            pointer-events: none;
+            padding: 28px 16px;
+            color: var(--dash-muted);
         }
 
-        .chart-container canvas {
-            position: relative;
-            z-index: 1;
-        }
-
-        .alert-dismissible {
-            position: relative;
-        }
-
-        /* Clean Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 48px 20px;
-            color: var(--text-muted);
-        }
-
-        .empty-state i {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.4;
-        }
-
-        .empty-state h4 {
-            font-size: 18px;
-            font-weight: 600;
+        .dashboard-page .empty-state i {
+            font-size: 30px;
+            opacity: 0.35;
+            color: var(--dash-muted);
             margin-bottom: 8px;
-            color: var(--text-secondary);
         }
 
-        .empty-state p {
+        .dashboard-page .empty-state h4 {
             font-size: 14px;
-            color: var(--text-muted);
+            color: #d9edf9;
+            margin-bottom: 4px;
+        }
+
+        .dashboard-page .empty-state p {
+            font-size: 11px;
+            color: var(--dash-muted);
+            margin-bottom: 0;
+        }
+
+        .dashboard-page .dash-v2-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-page .dash-v2-stat-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--dash-panel);
+            border: 1px solid var(--dash-border);
+            border-radius: 8px;
+            padding: 11px;
+        }
+
+        .dashboard-page .dash-v2-stat-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            border: 1px solid var(--dash-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--dash-muted);
+            background: rgba(255, 255, 255, 0.02);
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .dashboard-page .dash-v2-stat-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--dash-muted);
+            margin-bottom: 2px;
+            font-weight: 700;
+        }
+
+        .dashboard-page .dash-v2-stat-value {
+            font-size: 20px;
+            line-height: 1.1;
+            font-weight: 700;
+            color: #f1fbff;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .dashboard-page .dash-v2-stat-sub {
+            color: var(--dash-muted);
+            font-size: 10px;
+            margin-top: 2px;
+        }
+
+        .dashboard-page .text-cyan {
+            color: var(--dash-cyan) !important;
+        }
+
+        .dashboard-page .text-magenta {
+            color: var(--dash-magenta) !important;
+        }
+
+        .dashboard-page .text-warning {
+            color: var(--dash-yellow) !important;
+        }
+
+        .dashboard-page .dash-v2-grid-two {
+            display: grid;
+            grid-template-columns: 3fr 6fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-page .dash-v2-data-card {
+            margin-bottom: 12px;
+        }
+
+        .dashboard-page .dash-v2-data-grid {
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .dashboard-page .dash-v2-analytics-block {
+            background: var(--dash-panel-2);
+            border: 1px solid var(--dash-border);
+            border-radius: 7px;
+            padding: 10px;
+            min-height: 118px;
+        }
+
+        .dashboard-page .dash-v2-analytics-trend {
+            grid-column: span 6;
+        }
+
+        .dashboard-page .dash-v2-data-grid > .dash-v2-analytics-block:nth-child(2) {
+            grid-column: span 3;
+        }
+
+        .dashboard-page .dash-v2-data-grid > .dash-v2-analytics-block:nth-child(3) {
+            grid-column: span 3;
+        }
+
+        .dashboard-page .dash-v2-mini-label {
+            margin-bottom: 6px;
+            color: var(--dash-muted);
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .dashboard-page .dash-v2-big-value {
+            font-size: 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+        }
+
+        .dashboard-page .dash-v2-line {
+            height: 70px;
+            border: 1px solid var(--dash-border);
+            border-radius: 6px;
+            background: linear-gradient(180deg, rgba(20, 222, 141, 0.08) 0%, rgba(20, 222, 141, 0.01) 100%);
+            position: relative;
+            overflow: hidden;
+            padding: 4px;
+        }
+
+        .dashboard-page .dash-v2-line canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .dashboard-page .dash-v2-donut-wrap {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 78px;
+        }
+
+        .dashboard-page .dash-v2-donut {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            background: conic-gradient(#16db8f 0% 45%, #24d7e8 45% 75%, #c95cff 75% 90%, #3d5379 90% 100%);
+            position: relative;
+        }
+
+        .dashboard-page .dash-v2-donut::after {
+            content: "";
+            position: absolute;
+            inset: 12px;
+            border-radius: 50%;
+            background: var(--dash-panel-2);
+            border: 1px solid var(--dash-border);
+        }
+
+        .dashboard-page .dash-v2-legend-row {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            font-size: 9px;
+            color: var(--dash-muted);
+        }
+
+        .dashboard-page .dash-v2-bars {
+            height: 85px;
+            border: 1px solid var(--dash-border);
+            border-radius: 6px;
+            padding: 8px;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            align-items: end;
+        }
+
+        .dashboard-page .dash-v2-bars span {
+            display: block;
+            border-radius: 2px 2px 0 0;
+            background: rgba(36, 215, 232, 0.7);
+            min-height: 8px;
+        }
+
+        .dashboard-page .dash-v2-bars span.bar-empty {
+            opacity: 0.25;
+        }
+
+        .dashboard-page .dash-v2-kpi {
+            grid-column: span 3;
+            background: var(--dash-panel-2);
+            border: 1px solid var(--dash-border);
+            border-radius: 7px;
+            padding: 8px 10px;
+        }
+
+        .dashboard-page .dash-v2-kpi small {
+            display: block;
+            color: var(--dash-muted);
+            font-size: 9px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+
+        .dashboard-page .dash-v2-kpi strong {
+            font-size: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            color: #ecf9ff;
+        }
+
+        @media (max-width: 960px) {
+            .dashboard-page .dashboard-insights-grid,
+            .dashboard-page .risk-analytics-grid,
+            .dashboard-page .dashboard-split {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-page .dash-v2-grid-two {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-page .dash-v2-stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .dashboard-page .dash-v2-data-grid {
+                grid-template-columns: repeat(1, minmax(0, 1fr));
+            }
+
+            .dashboard-page .dash-v2-analytics-trend,
+            .dashboard-page .dash-v2-data-grid > .dash-v2-analytics-block:nth-child(2),
+            .dashboard-page .dash-v2-data-grid > .dash-v2-analytics-block:nth-child(3),
+            .dashboard-page .dash-v2-kpi {
+                grid-column: span 1;
+            }
         }
         
         /* Quick Action Cards */
@@ -1218,43 +1445,54 @@
                 {% endif %}
             {% endwith %}
 
-            <!-- Stats Grid -->
+            {% set dm = dashboard_metrics if dashboard_metrics is defined else {'total': 0, 'wins': 0, 'avg_pl': 0, 'best': 0} %}
+            {% set dashboard_win_rate = ((dm.wins / dm.total) * 100) if dm.total else 0 %}
+            {% set dashboard_avg_pl = dm.avg_pl | default(0) | float %}
+
             {% if user %}
-            <div class="stats-grid">
-                <div class="stat-card green">
-                    <i class="fas fa-wallet stat-icon"></i>
-                    <div class="stat-label">CRYPTOBUCKS</div>
-                    <div class="stat-value">${{ user.crypto_bucks | round(2) }}</div>
-                    <small class="text-muted">Virtual currency</small>
+            <div class="dash-v2-stats">
+                <div class="dash-v2-stat-card">
+                    <div class="dash-v2-stat-icon"><i class="fas fa-wallet"></i></div>
+                    <div>
+                        <div class="dash-v2-stat-label">CryptoBucks</div>
+                        <div class="dash-v2-stat-value text-success">${{ user.crypto_bucks | round(2) }}</div>
+                        <div class="dash-v2-stat-sub">Virtual currency</div>
+                    </div>
                 </div>
-                <div class="stat-card blue">
-                    <i class="fas fa-coins stat-icon"></i>
-                    <div class="stat-label">USDT BALANCE</div>
-                    <div class="stat-value">${{ user.tether_balance | default(0) | round(2) }}</div>
-                    <small class="text-muted">Stablecoin</small>
+                <div class="dash-v2-stat-card">
+                    <div class="dash-v2-stat-icon"><i class="fas fa-coins"></i></div>
+                    <div>
+                        <div class="dash-v2-stat-label">USDT Balance</div>
+                        <div class="dash-v2-stat-value text-cyan">${{ user.tether_balance | default(0) | round(2) }}</div>
+                        <div class="dash-v2-stat-sub">Stablecoin</div>
+                    </div>
                 </div>
-                <div class="stat-card pink">
-                    <i class="fas fa-shield-alt stat-icon"></i>
-                    <div class="stat-label">RISK TOLERANCE</div>
-                    <div class="stat-value">{{ user.risk_tolerance | upper if user.risk_tolerance else 'UNKNOWN' }}</div>
-                    <small class="text-muted">Score: {{ user.risk_score if user.risk_score is defined and user.risk_score is not none else 0 }}/100</small>
+                <div class="dash-v2-stat-card">
+                    <div class="dash-v2-stat-icon"><i class="fas fa-shield-alt"></i></div>
+                    <div>
+                        <div class="dash-v2-stat-label">Risk Tolerance</div>
+                        <div class="dash-v2-stat-value text-magenta">{{ user.risk_tolerance | upper if user.risk_tolerance else 'UNKNOWN' }}</div>
+                        <div class="dash-v2-stat-sub">{{ user.risk_score if user.risk_score is defined and user.risk_score is not none else 0 }}/100</div>
+                    </div>
                 </div>
-                <div class="stat-card orange">
-                    <i class="fas fa-chart-line stat-icon"></i>
-                    <div class="stat-label">ACTIVE ALERTS</div>
-                    <div class="stat-value">{{ triggered_alerts|length if triggered_alerts else 0 }}</div>
+                <div class="dash-v2-stat-card">
+                    <div class="dash-v2-stat-icon"><i class="fas fa-bell"></i></div>
+                    <div>
+                        <div class="dash-v2-stat-label">Active Alerts</div>
+                        <div class="dash-v2-stat-value text-warning">{{ triggered_alerts|length if triggered_alerts else 0 }}</div>
+                        <div class="dash-v2-stat-sub">{{ 'Need action' if (triggered_alerts and triggered_alerts|length > 0) else 'All clear' }}</div>
+                    </div>
                 </div>
             </div>
             {% endif %}
 
-            <div class="dashboard-insights-grid">
-                <!-- PRICE ALERTS -->
+            <div class="dash-v2-grid-two">
                 <div class="dashboard-card dashboard-card-alerts">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
                         <h3><i class="fas fa-bell"></i> PRICE ALERTS</h3>
                         <form method="POST" action="{{ url_for('refresh_alerts') }}">
                             <button type="submit" class="btn btn-secondary btn-sm">
-                                <i class="fas fa-sync-alt"></i> Refresh Alerts
+                                <i class="fas fa-sync-alt"></i> Refresh
                             </button>
                         </form>
                     </div>
@@ -1262,32 +1500,26 @@
                         {% if triggered_alerts %}
                             {% for alert in triggered_alerts[:2] %}
                                 <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                                    <i class="fas fa-exclamation-triangle" style="font-size: 18px; color: #f59e0b;"></i>
+                                    <i class="fas fa-exclamation-triangle" style="font-size: 14px; color: #f59e0b;"></i>
                                     <div style="flex: 1;">
                                         <strong>Alert Triggered!</strong><br>
                                         {{ alert.coin_id | capitalize }} price is {{ alert.alert_type }} ${{ alert.target_price | round(2) }}
                                         <small class="d-block text-muted mt-1">{{ alert.triggered_at }}</small>
                                     </div>
-                                    <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary">Trade Now</a>
+                                    <a href="{{ url_for('live_market') }}" class="btn btn-sm btn-primary">Trade</a>
                                     <form method="POST" action="{{ url_for('dismiss_alert', notification_id=alert.id) }}" style="display:inline;">
                                         <button type="submit" class="btn btn-sm btn-secondary">Dismiss</button>
                                     </form>
                                 </div>
                             {% endfor %}
                         {% else %}
-                            <div class="empty-state" style="padding: 22px 16px;">
-                                <i class="fas fa-bell-slash" style="font-size: 30px;"></i>
+                            <div class="empty-state" style="padding: 28px 12px;">
+                                <i class="fas fa-bell-slash"></i>
                                 <h4>No active alerts</h4>
-                                <p>You don't have any triggered price alerts at the moment.</p>
+                                <p>No triggered price alerts at the moment.</p>
                             </div>
                         {% endif %}
                     </div>
-                    {% if triggered_alerts and (triggered_alerts|length > 2) %}
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">Showing 2 of {{ triggered_alerts|length }} triggered alerts</small>
-                            <a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline-secondary">View All</a>
-                        </div>
-                    {% endif %}
                 </div>
 
                 <div class="dashboard-card">
@@ -1301,35 +1533,36 @@
                     {% if risk_analytics and risk_analytics.available %}
                         <div class="risk-analytics-grid">
                             <div>
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between align-items-center">
+                                <div class="mb-3 d-flex justify-content-between align-items-center">
+                                    <div>
                                         <span class="text-muted">Current profile</span>
-                                        <strong>{{ risk_analytics.risk_category }}</strong>
+                                        <div><strong>{{ risk_analytics.risk_category }}</strong></div>
                                     </div>
-                                    <div class="d-flex justify-content-between align-items-center">
+                                    <div class="text-end">
                                         <span class="text-muted">Overall score</span>
-                                        <strong>{{ risk_analytics.latest_score | round(1) }} / 100</strong>
+                                        <div><strong>{{ risk_analytics.latest_score | round(1) }} / 100</strong></div>
                                     </div>
                                 </div>
 
                                 <div class="risk-metric-row">
                                     <div class="risk-metric-head"><span>Financial Capacity</span><span>{{ risk_analytics.financial_score | round(1) }}%</span></div>
-                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.financial_score }}%"></div></div>
+                                    {% set risk_score = risk_analytics.financial_score | float %}
+                                    <div class="risk-meter"><div class="risk-meter-fill {% if risk_score < 35 %}low{% elif risk_score < 65 %}mid{% else %}high{% endif %}" style="width: {{ [risk_score, 3] | max }}%"></div></div>
                                 </div>
-
                                 <div class="risk-metric-row">
                                     <div class="risk-metric-head"><span>Investment Knowledge</span><span>{{ risk_analytics.knowledge_score | round(1) }}%</span></div>
-                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.knowledge_score }}%"></div></div>
+                                    {% set risk_score = risk_analytics.knowledge_score | float %}
+                                    <div class="risk-meter"><div class="risk-meter-fill {% if risk_score < 35 %}low{% elif risk_score < 65 %}mid{% else %}high{% endif %}" style="width: {{ [risk_score, 3] | max }}%"></div></div>
                                 </div>
-
                                 <div class="risk-metric-row">
                                     <div class="risk-metric-head"><span>Psychological Tolerance</span><span>{{ risk_analytics.psychological_score | round(1) }}%</span></div>
-                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.psychological_score }}%"></div></div>
+                                    {% set risk_score = risk_analytics.psychological_score | float %}
+                                    <div class="risk-meter"><div class="risk-meter-fill {% if risk_score < 35 %}low{% elif risk_score < 65 %}mid{% else %}high{% endif %}" style="width: {{ [risk_score, 3] | max }}%"></div></div>
                                 </div>
-
                                 <div class="risk-metric-row">
                                     <div class="risk-metric-head"><span>Goals & Timeline</span><span>{{ risk_analytics.goals_score | round(1) }}%</span></div>
-                                    <div class="risk-meter"><div class="risk-meter-fill" style="width: {{ risk_analytics.goals_score }}%"></div></div>
+                                    {% set risk_score = risk_analytics.goals_score | float %}
+                                    <div class="risk-meter"><div class="risk-meter-fill {% if risk_score < 35 %}low{% elif risk_score < 65 %}mid{% else %}high{% endif %}" style="width: {{ [risk_score, 3] | max }}%"></div></div>
                                 </div>
 
                                 {% if risk_analytics.last_updated %}
@@ -1342,10 +1575,10 @@
                             </div>
                         </div>
                     {% else %}
-                        <div class="empty-state" style="padding: 26px 16px;">
-                            <i class="fas fa-vial" style="font-size: 32px;"></i>
-                            <h4>No comprehensive risk assessment yet</h4>
-                            <p>Take the assessment to unlock dimension-level analytics and risk trend tracking.</p>
+                        <div class="empty-state" style="padding: 24px 12px;">
+                            <i class="fas fa-vial"></i>
+                            <h4>No risk assessment yet</h4>
+                            <p>Take the assessment to unlock risk trend analytics.</p>
                         </div>
                     {% endif %}
                 </div>
@@ -1398,6 +1631,98 @@
                 });
             </script>
             {% endif %}
+
+            <div class="dashboard-card dash-v2-data-card">
+                <h3><i class="fas fa-wave-square"></i> DATA ANALYTICS</h3>
+                {% set da = dashboard_analytics if dashboard_analytics is defined else {} %}
+                {% set alloc = da.allocation if da and da.allocation is defined else {'btc': 0, 'eth': 0, 'usdt': 0, 'other': 0} %}
+                {% set btc_pct = alloc.btc | default(0) | float %}
+                {% set eth_pct = alloc.eth | default(0) | float %}
+                {% set usdt_pct = alloc.usdt | default(0) | float %}
+                {% set other_pct = alloc.other | default(0) | float %}
+                {% set b1 = btc_pct %}
+                {% set b2 = btc_pct + eth_pct %}
+                {% set b3 = b2 + usdt_pct %}
+                <div class="dash-v2-data-grid">
+                    <div class="dash-v2-analytics-block dash-v2-analytics-trend">
+                        <p class="dash-v2-mini-label">Portfolio Value (7d)</p>
+                        <div class="d-flex align-items-end gap-2 mb-2">
+                            <span class="dash-v2-big-value">${{ da.portfolio_total | default(0) | round(2) }}</span>
+                            <span class="{% if (da.portfolio_change_pct_7d | default(0) | float) >= 0 %}price-positive{% else %}price-negative{% endif %}" style="font-size:11px;">
+                                {% if (da.portfolio_change_pct_7d | default(0) | float) >= 0 %}+{% endif %}{{ da.portfolio_change_pct_7d | default(0) | round(2) }}%
+                            </span>
+                        </div>
+                        <div class="dash-v2-line"><canvas id="portfolioTrendChart"></canvas></div>
+                    </div>
+
+                    <div class="dash-v2-analytics-block">
+                        <p class="dash-v2-mini-label">Allocation</p>
+                        <div class="dash-v2-donut-wrap">
+                            <div class="dash-v2-donut" style="background: conic-gradient(#24d7e8 0% {{ b1 }}%, #16db8f {{ b1 }}% {{ b2 }}%, #c95cff {{ b2 }}% {{ b3 }}%, #3d5379 {{ b3 }}% 100%);"></div>
+                        </div>
+                        <div class="dash-v2-legend-row">
+                            <span>BTC {{ btc_pct | round(1) }}%</span>
+                            <span>ETH {{ eth_pct | round(1) }}%</span>
+                            <span>USDT {{ usdt_pct | round(1) }}%</span>
+                            <span>Other {{ other_pct | round(1) }}%</span>
+                        </div>
+                    </div>
+
+                    <div class="dash-v2-analytics-block">
+                        <p class="dash-v2-mini-label">Trade Volume ({{ da.trade_volume_window_label | default('24h') }})</p>
+                        <div class="dash-v2-bars">
+                            {% set bars = da.trade_volume_bars if da and da.trade_volume_bars is defined else [0, 0, 0, 0, 0, 0] %}
+                            {% for bar in bars %}
+                                {% set bar_value = bar | float %}
+                                {% set bar_height = (bar_value if bar_value >= 8 else 8) if bar_value > 0 else 8 %}
+                                <span class="{% if bar_value <= 0 %}bar-empty{% endif %}" style="height:{{ bar_height }}%"></span>
+                            {% endfor %}
+                        </div>
+                        <div class="dash-v2-stat-sub" style="margin-top:6px;">${{ da.trade_volume_total | default(0) | round(2) }} total</div>
+                    </div>
+
+                    <div class="dash-v2-kpi"><small>Win Rate</small><strong>{{ dashboard_win_rate | round(1) }}%</strong></div>
+                    <div class="dash-v2-kpi"><small>Avg P/L</small><strong class="{% if dashboard_avg_pl >= 0 %}price-positive{% else %}price-negative{% endif %}">${{ dashboard_avg_pl | round(2) }}</strong></div>
+                    <div class="dash-v2-kpi"><small>Total Trades</small><strong>{{ dm.total }}</strong></div>
+                    <div class="dash-v2-kpi"><small>Best Trade</small><strong class="{% if (dm.best or 0) >= 0 %}price-positive{% else %}price-negative{% endif %}">${{ (dm.best or 0) | round(2) }}</strong></div>
+                </div>
+            </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const trendCanvas = document.getElementById('portfolioTrendChart');
+                    if (!trendCanvas) return;
+
+                    const trendLabels = {{ dashboard_analytics.portfolio_trend_labels|default([])|tojson }};
+                    const trendValues = {{ dashboard_analytics.portfolio_trend_values|default([])|tojson }};
+                    if (!trendLabels.length || !trendValues.length) return;
+
+                    new Chart(trendCanvas.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: trendLabels,
+                            datasets: [{
+                                data: trendValues,
+                                borderColor: '#16db8f',
+                                backgroundColor: 'rgba(22, 219, 143, 0.15)',
+                                fill: true,
+                                tension: 0.34,
+                                pointRadius: 0,
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                            scales: {
+                                x: { display: false },
+                                y: { display: false }
+                            }
+                        }
+                    });
+                });
+            </script>
 
             <div class="dashboard-split">
                 <!-- Market Overview -->
@@ -6848,7 +7173,7 @@
         </div>
 
     {% elif section == 'achievements' %}
-        <div class="container">
+        <div class="container ach-page">
             <nav class="navbar navbar-expand-lg mb-4">
                 <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-arrow-left"></i>COINPREP</a>
                 <div class="navbar-nav ms-auto">
@@ -6878,80 +7203,93 @@
             {% endwith %}
 
             <div class="ach-shell">
-                <div class="ach-head-row">
+                <div class="ach-topbar">
                     <div>
-                        <h2 class="ach-heading">Milestone Progress</h2>
-                        <p class="ach-sub">Unlocked: <strong>{{ unlocked_count or 0 }}/{{ total_achievements or 0 }}</strong></p>
+                        <h2 class="ach-heading"><i class="fas fa-trophy"></i> ACHIEVEMENTS</h2>
+                        <p class="ach-sub">Unlock progress-based milestones</p>
                     </div>
-                    <div class="ach-score-card">
-                        <span>My Rank</span>
-                        <strong>{% if my_rank %}#{{ my_rank.rank }}{% else %}-{% endif %}</strong>
-                        <small>{% if my_rank %}Score {{ my_rank.score }}{% else %}No rank yet{% endif %}</small>
+                    <div class="ach-unlocked-pill">
+                        <i class="fas fa-award"></i>
+                        <strong>{{ unlocked_count or 0 }}/{{ total_achievements or 0 }}</strong>
+                        <span>Unlocked</span>
                     </div>
                 </div>
 
-                <div class="ach-metrics-grid">
-                    <div class="ach-metric-item">
-                        <div class="label">Net Profit</div>
-                        <div class="value {% if user_metrics.total_profit >= 0 %}is-pos{% else %}is-neg{% endif %}">
-                            {% if user_metrics.total_profit >= 0 %}+{% endif %}${{ user_metrics.total_profit | round(2) }}
+                <div class="ach-overview-grid">
+                    <div class="ach-stats-panel">
+                        <div class="ach-panel-head">
+                            <h3><i class="fas fa-crown"></i> My Stats</h3>
+                            <span>Rank {% if my_rank %}#{{ my_rank.rank }}{% else %}--{% endif %}</span>
                         </div>
-                    </div>
-                    <div class="ach-metric-item">
-                        <div class="label">Closed Trades</div>
-                        <div class="value">{{ user_metrics.closed_trades }}</div>
-                    </div>
-                    <div class="ach-metric-item">
-                        <div class="label">Win Rate</div>
-                        <div class="value">{{ user_metrics.win_rate }}%</div>
-                    </div>
-                    <div class="ach-metric-item">
-                        <div class="label">Risk Score</div>
-                        <div class="value">{{ user_metrics.risk_score }}</div>
-                    </div>
-                    <div class="ach-metric-item">
-                        <div class="label">Coin Diversity</div>
-                        <div class="value">{{ user_metrics.diversity }}</div>
-                    </div>
-                </div>
 
-                <div class="ach-grid">
-                    {% if achievement_cards %}
-                        {% for card in achievement_cards %}
-                            {% set progress_pct = ((card.progress / card.target) * 100) if card.target else 0 %}
-                            <div class="ach-card {% if card.unlocked %}unlocked{% else %}locked{% endif %}">
-                                <div class="ach-card-top">
-                                    <div class="ach-icon"><i class="fas {{ card.icon }}"></i></div>
-                                    <div>
-                                        <h4>{{ card.title }}</h4>
-                                        <p>{{ card.description }}</p>
-                                    </div>
-                                    <div class="ach-status">
-                                        {% if card.unlocked %}
-                                            <i class="fas fa-trophy"></i>
-                                        {% else %}
-                                            <i class="fas fa-lock"></i>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="ach-progress-row">
-                                    <small>{{ card.progress | round(1) }} / {{ card.target }}</small>
-                                    <small>{{ progress_pct | round(0) }}%</small>
-                                </div>
-                                <div class="ach-progress-track">
-                                    <span class="ach-progress-fill" style="width: {{ progress_pct }}%;"></span>
+                        <div class="ach-metrics-grid">
+                            <div class="ach-metric-item">
+                                <div class="label">Score</div>
+                                <div class="value text-cyan">{{ my_rank.score if my_rank else 0 }}</div>
+                            </div>
+                            <div class="ach-metric-item">
+                                <div class="label">Net Profit</div>
+                                <div class="value {% if user_metrics.total_profit >= 0 %}is-pos{% else %}is-neg{% endif %}">
+                                    {% if user_metrics.total_profit >= 0 %}+{% endif %}${{ user_metrics.total_profit | round(2) }}
                                 </div>
                             </div>
-                        {% endfor %}
-                    {% endif %}
+                            <div class="ach-metric-item">
+                                <div class="label">Closed Trades</div>
+                                <div class="value">{{ user_metrics.closed_trades }}</div>
+                            </div>
+                            <div class="ach-metric-item">
+                                <div class="label">Win Rate</div>
+                                <div class="value text-warning">{{ user_metrics.win_rate }}%</div>
+                            </div>
+                            <div class="ach-metric-item">
+                                <div class="label">Risk Score</div>
+                                <div class="value text-magenta">{{ user_metrics.risk_score }}</div>
+                            </div>
+                            <div class="ach-metric-item">
+                                <div class="label">Coin Diversity</div>
+                                <div class="value text-cyan">{{ user_metrics.diversity }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ach-grid">
+                        {% if achievement_cards %}
+                            {% for card in achievement_cards %}
+                                {% set progress_pct = ((card.progress / card.target) * 100) if card.target else 0 %}
+                                <div class="ach-card {% if card.unlocked %}unlocked{% else %}locked{% endif %}">
+                                    <div class="ach-card-top">
+                                        <div class="ach-icon"><i class="fas {{ card.icon }}"></i></div>
+                                        <div>
+                                            <h4>{{ card.title }}</h4>
+                                            <p>{{ card.description }}</p>
+                                        </div>
+                                        <div class="ach-status">
+                                            {% if card.unlocked %}
+                                                <i class="fas fa-check-circle"></i>
+                                            {% else %}
+                                                <i class="fas fa-lock"></i>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="ach-progress-row">
+                                        <small>{{ card.progress | round(1) }} / {{ card.target }}</small>
+                                        <small>{{ progress_pct | round(0) }}%</small>
+                                    </div>
+                                    <div class="ach-progress-track">
+                                        <span class="ach-progress-fill" style="width: {{ progress_pct }}%;"></span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
                 </div>
 
                 <div class="ach-inline-form">
-                    <h3>Manual Achievement Tag</h3>
+                    <h3><i class="fas fa-link"></i> Manual Achievement Tag</h3>
                     <form method="POST" action="{{ url_for('update_achievements') }}">
                         <div class="input-group mb-0">
                             <input type="text" class="form-control" name="achievement" placeholder="Example: Research Pro" required>
-                            <button type="submit" class="btn btn-primary">Add</button>
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add</button>
                         </div>
                     </form>
                 </div>
@@ -7014,253 +7352,437 @@
             </div>
 
             <style>
-                .ach-shell {
+                .ach-page {
+                    color: #dff0ff;
+                }
+
+                .ach-page .navbar {
+                    background: linear-gradient(180deg, #0b1527 0%, #0a1323 100%);
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    margin-bottom: 12px !important;
+                }
+
+                .ach-page .navbar-brand {
+                    color: #15d9a0 !important;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 11px;
+                    letter-spacing: 0.09em;
+                }
+
+                .ach-page .nav-link {
+                    color: #7f9eb9 !important;
+                    font-size: 11px;
+                    border-radius: 6px;
+                    border: 1px solid transparent;
+                    padding: 5px 8px !important;
+                }
+
+                .ach-page .nav-link:hover {
+                    color: #e9f7ff !important;
+                    border-color: rgba(67, 107, 147, 0.65);
+                    background: rgba(255, 255, 255, 0.02);
+                }
+
+                .ach-page .ach-shell {
                     display: block;
                 }
 
-                .ach-head-row {
+                .ach-page .ach-topbar {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    gap: 16px;
-                    margin-bottom: 14px;
+                    gap: 12px;
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    border-radius: 10px;
+                    background: linear-gradient(180deg, #0b1629 0%, #0a1324 100%);
+                    padding: 10px 12px;
+                    margin-bottom: 10px;
                 }
 
-                .ach-heading {
+                .ach-page .ach-heading {
                     margin: 0;
-                    font-size: 24px;
-                    font-weight: 700;
-                    color: var(--text-primary);
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 18px;
+                    letter-spacing: 0.06em;
+                    color: #e4f6ff;
                 }
 
-                .ach-sub {
-                    margin: 6px 0 0;
-                    color: var(--text-secondary);
+                .ach-page .ach-heading i {
+                    color: #14de8d;
+                    font-size: 15px;
                 }
 
-                .ach-score-card {
-                    min-width: 150px;
-                    background: #0f172a;
-                    color: #e2e8f0;
-                    border: 1px solid #1e293b;
-                    border-radius: 12px;
-                    padding: 10px 14px;
-                    text-align: right;
+                .ach-page .ach-sub {
+                    margin: 7px 0 0;
+                    color: #7f9eb9;
+                    font-size: 12px;
                 }
 
-                .ach-score-card span {
+                .ach-page .ach-unlocked-pill {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    border-radius: 999px;
+                    background: rgba(10, 20, 39, 0.9);
+                    color: #9fc3df;
+                    padding: 6px 11px;
                     font-size: 11px;
-                    color: #94a3b8;
-                    text-transform: uppercase;
-                    letter-spacing: 0.4px;
+                    font-weight: 700;
                 }
 
-                .ach-score-card strong {
-                    display: block;
-                    font-size: 28px;
-                    line-height: 1;
-                    color: #22d3ee;
-                    margin-top: 2px;
+                .ach-page .ach-unlocked-pill i,
+                .ach-page .ach-unlocked-pill strong {
+                    color: #14de8d;
                 }
 
-                .ach-score-card small {
-                    color: #93c5fd;
-                    font-weight: 600;
-                }
-
-                .ach-metrics-grid {
+                .ach-page .ach-overview-grid {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                    grid-template-columns: 1.05fr 2.1fr;
                     gap: 10px;
-                    margin-bottom: 14px;
                 }
 
-                .ach-metric-item {
-                    background: #f8fafc;
-                    border: 1px solid #e2e8f0;
+                .ach-page .ach-stats-panel {
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    border-radius: 10px;
+                    background: linear-gradient(180deg, #0b1629 0%, #0a1324 100%);
+                    padding: 10px;
+                }
+
+                .ach-page .ach-panel-head {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 9px;
+                    color: #9fc3df;
+                }
+
+                .ach-page .ach-panel-head h3 {
+                    margin: 0;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 13px;
+                    color: #f2fbff;
+                    display: flex;
+                    gap: 7px;
+                    align-items: center;
+                }
+
+                .ach-page .ach-panel-head h3 i {
+                    color: #f3bc37;
+                }
+
+                .ach-page .ach-panel-head span {
+                    font-size: 12px;
+                    color: #14de8d;
+                    font-weight: 700;
+                }
+
+                .ach-page .ach-metrics-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 7px;
+                }
+
+                .ach-page .ach-metric-item {
+                    background: rgba(18, 34, 55, 0.72);
+                    border: 1px solid rgba(29, 66, 107, 0.68);
+                    border-radius: 7px;
+                    padding: 8px 9px;
+                }
+
+                .ach-page .ach-metric-item .label {
+                    font-size: 9px;
+                    letter-spacing: 0.14em;
+                    text-transform: uppercase;
+                    color: #789ab7;
+                    margin-bottom: 5px;
+                    font-weight: 700;
+                }
+
+                .ach-page .ach-metric-item .value {
+                    font-family: 'JetBrains Mono', monospace;
+                    font-size: 31px;
+                    line-height: 1;
+                    color: #e8f6ff;
+                    font-weight: 700;
+                }
+
+                .ach-page .ach-metric-item .value.is-pos {
+                    color: #14de8d;
+                }
+
+                .ach-page .ach-metric-item .value.is-neg {
+                    color: #ff5f67;
+                }
+
+                .ach-page .text-cyan {
+                    color: #19deed !important;
+                }
+
+                .ach-page .text-warning {
+                    color: #f3bc37 !important;
+                }
+
+                .ach-page .text-magenta {
+                    color: #c95cff !important;
+                }
+
+                .ach-page .ach-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 8px;
+                }
+
+                .ach-page .ach-card {
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    background: linear-gradient(180deg, #0d1a2e 0%, #0a1324 100%);
                     border-radius: 10px;
                     padding: 10px;
                 }
 
-                .ach-metric-item .label {
-                    font-size: 11px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.4px;
-                    color: #64748b;
-                    margin-bottom: 4px;
+                .ach-page .ach-card.unlocked {
+                    border-color: rgba(20, 222, 141, 0.75);
+                    box-shadow: inset 0 0 0 1px rgba(20, 222, 141, 0.15), 0 8px 14px rgba(4, 19, 33, 0.3);
                 }
 
-                .ach-metric-item .value {
-                    font-size: 21px;
-                    font-weight: 700;
-                    color: #0f172a;
-                    line-height: 1.1;
-                }
-
-                .ach-metric-item .value.is-pos {
-                    color: #059669;
-                }
-
-                .ach-metric-item .value.is-neg {
-                    color: #dc2626;
-                }
-
-                .ach-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                    gap: 12px;
-                }
-
-                .ach-card {
-                    border: 1px solid #e2e8f0;
-                    background: #ffffff;
-                    border-radius: 12px;
-                    padding: 14px;
-                    transition: all 0.2s ease;
-                }
-
-                .ach-card.unlocked {
-                    border-color: #14b8a6;
-                    box-shadow: 0 0 0 1px rgba(20, 184, 166, 0.15), 0 8px 18px rgba(20, 184, 166, 0.12);
-                }
-
-                .ach-card.locked {
-                    opacity: 0.86;
-                }
-
-                .ach-card-top {
+                .ach-page .ach-card-top {
                     display: grid;
                     grid-template-columns: auto 1fr auto;
                     align-items: center;
-                    gap: 12px;
-                    margin-bottom: 10px;
+                    gap: 9px;
+                    margin-bottom: 8px;
                 }
 
-                .ach-icon {
-                    width: 38px;
-                    height: 38px;
-                    border-radius: 9px;
+                .ach-page .ach-icon {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 7px;
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    background: rgba(10, 20, 39, 0.8);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: #0f172a;
-                    color: #22d3ee;
+                    color: #19deed;
+                    font-size: 12px;
                 }
 
-                .ach-card h4 {
+                .ach-page .ach-card h4 {
                     margin: 0;
-                    font-size: 18px;
-                    color: #0f172a;
-                    font-weight: 700;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 11px;
+                    line-height: 1.35;
+                    color: #eaf8ff;
                 }
 
-                .ach-card p {
-                    margin: 2px 0 0;
-                    color: #64748b;
+                .ach-page .ach-card p {
+                    margin: 4px 0 0;
+                    color: #789ab7;
+                    font-size: 11px;
+                    line-height: 1.28;
+                }
+
+                .ach-page .ach-status {
                     font-size: 13px;
                 }
 
-                .ach-status {
-                    font-size: 16px;
-                    color: #0ea5e9;
+                .ach-page .ach-card.unlocked .ach-status {
+                    color: #14de8d;
                 }
 
-                .ach-progress-row {
+                .ach-page .ach-card.locked .ach-status {
+                    color: #6b88a4;
+                }
+
+                .ach-page .ach-progress-row {
                     display: flex;
                     justify-content: space-between;
-                    color: #64748b;
-                    font-weight: 600;
-                    font-size: 11px;
-                    margin-bottom: 6px;
+                    color: #83a4bf;
+                    font-size: 10px;
+                    font-weight: 700;
+                    margin-bottom: 4px;
                 }
 
-                .ach-progress-track {
+                .ach-page .ach-progress-track {
                     width: 100%;
-                    height: 6px;
+                    height: 5px;
+                    background: #0a1220;
+                    border: 1px solid rgba(29, 66, 107, 0.72);
                     border-radius: 999px;
-                    background: #e2e8f0;
                     overflow: hidden;
                 }
 
-                .ach-progress-fill {
+                .ach-page .ach-progress-fill {
                     display: block;
                     height: 100%;
-                    background: linear-gradient(90deg, #14b8a6, #22d3ee);
+                    background: linear-gradient(90deg, #19deed 0%, #14de8d 100%);
                 }
 
-                .ach-inline-form {
-                    margin-top: 16px;
-                    padding: 12px;
-                    border: 1px dashed #cbd5e1;
+                .ach-page .ach-inline-form {
+                    margin-top: 10px;
+                    border: 1px solid rgba(29, 66, 107, 0.72);
                     border-radius: 10px;
-                    background: #f8fafc;
+                    background: linear-gradient(180deg, #0b1629 0%, #0a1324 100%);
+                    padding: 9px 10px;
                 }
 
-                .ach-inline-form h3 {
-                    margin-bottom: 10px;
-                    font-size: 14px;
-                    letter-spacing: 0.3px;
-                    text-transform: uppercase;
-                    color: #334155;
+                .ach-page .ach-inline-form h3 {
+                    margin: 0 0 7px;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 11px;
+                    color: #e8f6ff;
+                    display: flex;
+                    gap: 7px;
+                    align-items: center;
                 }
 
-                .leader-shell {
-                    border: 1px solid #e2e8f0;
-                    border-radius: 12px;
-                    background: #ffffff;
-                    padding: 14px;
+                .ach-page .ach-inline-form h3 i {
+                    color: #c95cff;
                 }
 
-                .leader-top h3 {
+                .ach-page .ach-inline-form .input-group {
+                    gap: 0;
+                }
+
+                .ach-page .ach-inline-form .form-control {
+                    background: #091426;
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    color: #e6f5ff;
+                    border-radius: 6px 0 0 6px;
+                    font-size: 12px;
+                }
+
+                .ach-page .ach-inline-form .form-control::placeholder {
+                    color: #62839f;
+                }
+
+                .ach-page .ach-inline-form .btn-primary {
+                    background: rgba(20, 222, 141, 0.18);
+                    border: 1px solid rgba(20, 222, 141, 0.6);
+                    color: #14de8d;
+                    border-radius: 0 6px 6px 0;
+                    font-size: 12px;
+                    font-weight: 700;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+
+                .ach-page .ach-inline-form .btn-primary:hover {
+                    background: rgba(20, 222, 141, 0.3);
+                    border-color: rgba(20, 222, 141, 0.85);
+                    color: #eafff4;
+                }
+
+                .ach-page .leader-shell {
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    border-radius: 10px;
+                    background: linear-gradient(180deg, #0b1629 0%, #0a1324 100%);
+                    padding: 10px;
+                }
+
+                .ach-page .leader-top h3 {
                     margin: 0;
-                    color: #0f172a;
+                    color: #f0fbff;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 14px;
                     display: flex;
                     align-items: center;
                     gap: 8px;
                 }
 
-                .leader-top p {
-                    margin: 4px 0 0;
-                    color: #64748b;
+                .ach-page .leader-top h3 i {
+                    color: #f3bc37;
                 }
 
-                .leader-factors {
-                    margin-top: 10px;
-                    margin-bottom: 10px;
+                .ach-page .leader-top p {
+                    margin: 5px 0 0;
+                    color: #789ab7;
+                    font-size: 11px;
+                }
+
+                .ach-page .leader-factors {
                     display: flex;
                     flex-wrap: wrap;
-                    gap: 8px;
+                    gap: 6px;
+                    margin: 9px 0;
                 }
 
-                .factor-chip {
-                    border: 1px solid #cbd5e1;
-                    background: #f8fafc;
-                    color: #334155;
+                .ach-page .factor-chip {
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    background: rgba(10, 20, 39, 0.84);
                     border-radius: 999px;
-                    padding: 5px 10px;
-                    font-size: 11px;
-                    font-weight: 600;
+                    color: #7fa1bc;
+                    padding: 4px 7px;
+                    font-size: 9px;
+                    font-weight: 700;
                 }
 
-                .leader-table-wrap {
+                .ach-page .leader-table-wrap {
                     margin-top: 6px;
-                    max-height: 420px;
+                    border: 1px solid rgba(29, 66, 107, 0.72);
+                    border-radius: 7px;
                     overflow: auto;
+                    background: #091324;
                 }
 
-                .leader-me {
-                    background: rgba(34, 211, 238, 0.08);
+                .ach-page .leader-table-wrap .table {
+                    margin-bottom: 0;
+                    color: #d8edff;
                 }
 
-                @media (max-width: 780px) {
-                    .ach-head-row {
+                .ach-page .leader-table-wrap .table thead th {
+                    background: #0d1a2e;
+                    color: #7f9eb9;
+                    border: none;
+                    border-bottom: 1px solid rgba(29, 66, 107, 0.72);
+                    font-size: 9px;
+                    letter-spacing: 0.14em;
+                    text-transform: uppercase;
+                    padding: 9px 10px;
+                }
+
+                .ach-page .leader-table-wrap .table tbody td {
+                    border: none;
+                    border-bottom: 1px solid rgba(29, 66, 107, 0.45);
+                    font-size: 12px;
+                    color: #c5dff1;
+                    padding: 8px 10px;
+                }
+
+                .ach-page .leader-me {
+                    background: rgba(20, 222, 141, 0.08) !important;
+                }
+
+                @media (max-width: 1080px) {
+                    .ach-page .ach-overview-grid {
+                        grid-template-columns: 1fr;
+                    }
+                }
+
+                @media (max-width: 900px) {
+                    .ach-page .ach-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+
+                @media (max-width: 640px) {
+                    .ach-page .ach-topbar {
                         flex-direction: column;
                         align-items: flex-start;
                     }
 
-                    .ach-score-card {
-                        width: 100%;
-                        text-align: left;
+                    .ach-page .ach-grid,
+                    .ach-page .ach-metrics-grid {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .ach-page .ach-metric-item .value {
+                        font-size: 26px;
                     }
                 }
             </style>

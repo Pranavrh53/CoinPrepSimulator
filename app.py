@@ -1198,13 +1198,43 @@ def dashboard():
         'trend_scores': [],
         'last_updated': None,
     }
+    dashboard_metrics = {
+        'total': 0,
+        'wins': 0,
+        'avg_pl': 0.0,
+        'best': 0.0,
+    }
+    dashboard_analytics = {
+        'portfolio_total': 0.0,
+        'portfolio_change_pct_7d': 0.0,
+        'portfolio_trend_labels': [],
+        'portfolio_trend_values': [],
+        'allocation': {
+            'btc': 0.0,
+            'eth': 0.0,
+            'usdt': 0.0,
+            'other': 0.0,
+        },
+        'trade_volume_total': 0.0,
+        'trade_volume_window_label': '24h',
+        'trade_volume_bars': [0, 0, 0, 0, 0, 0],
+    }
+
+    def safe_float(value, default=0.0):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
     if conn:
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT crypto_bucks, tether_balance, risk_tolerance, risk_score, achievements FROM users WHERE id = %s", (session['user_id'],))
             user = cursor.fetchone()
             if user:
-                user['tether_balance'] = float(user.get('tether_balance', 0))
+                user['crypto_bucks'] = safe_float(user.get('crypto_bucks', 0))
+                user['tether_balance'] = safe_float(user.get('tether_balance', 0))
+                dashboard_analytics['portfolio_total'] = round(user['crypto_bucks'] + user['tether_balance'], 2)
             cursor.execute("""
                 SELECT n.id, n.coin_id, n.message, n.created_at, pa.alert_type, pa.target_price 
                 FROM notifications n
@@ -1233,20 +1263,214 @@ def dashboard():
             # Archived trades shown on dashboard right panel
             cursor.execute(
                 """
-                SELECT wallet_id, coin_id, amount, price, sold_price
+                SELECT wallet_id, coin_id, amount, price, sold_price, timestamp
                 FROM transactions
                 WHERE user_id = %s AND type = 'sell'
-                ORDER BY id DESC
+                ORDER BY timestamp DESC
                 LIMIT 12
                 """,
                 (session['user_id'],)
             )
             sold_transactions = cursor.fetchall()
             for tx in sold_transactions:
-                tx['price'] = float(tx.get('price') or 0)
-                tx['sold_price'] = float(tx.get('sold_price') or 0)
-                tx['amount'] = float(tx.get('amount') or 0)
+                tx['price'] = safe_float(tx.get('price'))
+                tx['sold_price'] = safe_float(tx.get('sold_price'))
+                tx['amount'] = safe_float(tx.get('amount'))
                 tx['profit'] = round((tx['sold_price'] - tx['price']) * tx['amount'], 2)
+
+            # Account metrics and portfolio trend (based on realized P/L over the latest 7 days).
+            cursor.execute(
+                """
+                SELECT coin_id, amount, price, sold_price, timestamp
+                FROM transactions
+                WHERE user_id = %s AND type = 'sell'
+                ORDER BY timestamp ASC
+                """,
+                (session['user_id'],)
+            )
+            all_sold_transactions = cursor.fetchall() or []
+
+            if all_sold_transactions:
+                total_pl = 0.0
+                best_pl = None
+                wins = 0
+                for tx in all_sold_transactions:
+                    amount = safe_float(tx.get('amount'))
+                    buy_price = safe_float(tx.get('price'))
+                    sell_price = safe_float(tx.get('sold_price'))
+                    pl = (sell_price - buy_price) * amount
+                    total_pl += pl
+                    if pl > 0:
+                        wins += 1
+                    if best_pl is None or pl > best_pl:
+                        best_pl = pl
+
+                total_trades = len(all_sold_transactions)
+                dashboard_metrics['total'] = total_trades
+                dashboard_metrics['wins'] = wins
+                dashboard_metrics['avg_pl'] = round(total_pl / total_trades, 2) if total_trades else 0.0
+                dashboard_metrics['best'] = round(best_pl if best_pl is not None else 0.0, 2)
+
+            today = datetime.now().date()
+            trend_dates = [today - timedelta(days=i) for i in range(6, -1, -1)]
+            daily_realized = {d: 0.0 for d in trend_dates}
+            for tx in all_sold_transactions:
+                timestamp_value = tx.get('timestamp')
+                if not timestamp_value:
+                    continue
+                day_key = timestamp_value.date()
+                if day_key in daily_realized:
+                    amount = safe_float(tx.get('amount'))
+                    buy_price = safe_float(tx.get('price'))
+                    sell_price = safe_float(tx.get('sold_price'))
+                    daily_realized[day_key] += (sell_price - buy_price) * amount
+
+            pnl_7d = sum(daily_realized.values())
+            current_total = dashboard_analytics['portfolio_total']
+            baseline_total = current_total - pnl_7d
+            running_total = baseline_total
+            trend_values = []
+            for d in trend_dates:
+                running_total += daily_realized[d]
+                trend_values.append(round(running_total, 2))
+
+            dashboard_analytics['portfolio_trend_labels'] = [d.strftime('%b %d') for d in trend_dates]
+            dashboard_analytics['portfolio_trend_values'] = trend_values
+            if baseline_total > 0:
+                dashboard_analytics['portfolio_change_pct_7d'] = round((pnl_7d / baseline_total) * 100, 2)
+
+            # Asset allocation from active holdings + balances.
+            cursor.execute(
+                """
+                SELECT id, coin_id, amount, price
+                FROM transactions
+                WHERE user_id = %s AND type = 'buy'
+                ORDER BY id ASC
+                """,
+                (session['user_id'],)
+            )
+            buy_transactions = cursor.fetchall() or []
+
+            cursor.execute(
+                """
+                SELECT buy_transaction_id, SUM(amount) as total_sold
+                FROM transactions
+                WHERE user_id = %s AND type = 'sell' AND buy_transaction_id IS NOT NULL
+                GROUP BY buy_transaction_id
+                """,
+                (session['user_id'],)
+            )
+            sold_amount_rows = cursor.fetchall() or []
+            sold_amounts = {row['buy_transaction_id']: safe_float(row.get('total_sold')) for row in sold_amount_rows}
+
+            holdings_amounts = {}
+            for buy in buy_transactions:
+                buy_id = buy.get('id')
+                coin_id = (buy.get('coin_id') or '').lower()
+                if not coin_id:
+                    continue
+                remaining = safe_float(buy.get('amount')) - sold_amounts.get(buy_id, 0.0)
+                if remaining > 0:
+                    holdings_amounts[coin_id] = holdings_amounts.get(coin_id, 0.0) + remaining
+
+            holdings_values = {}
+            if holdings_amounts:
+                coin_ids = ','.join(sorted(holdings_amounts.keys()))
+                holdings_response = fetch_with_retry(
+                    f"{COINGECKO_API}/coins/markets?vs_currency=usd&ids={coin_ids}"
+                )
+                if holdings_response:
+                    holdings_data = json.loads(holdings_response.text)
+                    market_prices = {
+                        item.get('id'): safe_float(item.get('current_price'))
+                        for item in holdings_data
+                    }
+                    for coin_id, amount in holdings_amounts.items():
+                        holdings_values[coin_id] = amount * market_prices.get(coin_id, 0.0)
+
+            btc_value = holdings_values.get('bitcoin', 0.0)
+            eth_value = holdings_values.get('ethereum', 0.0)
+            usdt_value = user['tether_balance'] if user else 0.0
+            other_coin_value = sum(
+                value for coin_id, value in holdings_values.items()
+                if coin_id not in ('bitcoin', 'ethereum', 'tether')
+            )
+            if 'tether' in holdings_values:
+                usdt_value += holdings_values.get('tether', 0.0)
+            other_value = (user['crypto_bucks'] if user else 0.0) + other_coin_value
+
+            allocation_total = btc_value + eth_value + usdt_value + other_value
+            if allocation_total > 0:
+                dashboard_analytics['allocation']['btc'] = round((btc_value / allocation_total) * 100, 1)
+                dashboard_analytics['allocation']['eth'] = round((eth_value / allocation_total) * 100, 1)
+                dashboard_analytics['allocation']['usdt'] = round((usdt_value / allocation_total) * 100, 1)
+                dashboard_analytics['allocation']['other'] = round((other_value / allocation_total) * 100, 1)
+
+            # Trade volume bars (prefer last 24h; fallback to last 30d if 24h is empty).
+            cursor.execute(
+                """
+                SELECT amount, price, sold_price, type, timestamp
+                FROM transactions
+                WHERE user_id = %s AND timestamp >= (NOW() - INTERVAL 24 HOUR)
+                ORDER BY timestamp ASC
+                """,
+                (session['user_id'],)
+            )
+            recent_transactions = cursor.fetchall() or []
+
+            def compute_volume_bars(rows, window_start, bucket_seconds):
+                bar_values = [0.0] * 6
+                for tx in rows:
+                    ts = tx.get('timestamp')
+                    if not ts:
+                        continue
+                    elapsed_seconds = max(0, (ts - window_start).total_seconds())
+                    bucket_index = min(5, int(elapsed_seconds // bucket_seconds))
+
+                    amount = safe_float(tx.get('amount'))
+                    if (tx.get('type') or '').lower() == 'sell' and tx.get('sold_price') is not None:
+                        unit_price = safe_float(tx.get('sold_price'))
+                    else:
+                        unit_price = safe_float(tx.get('price'))
+
+                    bar_values[bucket_index] += max(0.0, amount * unit_price)
+
+                total_value = sum(bar_values)
+                max_bar = max(bar_values) if bar_values else 0.0
+                normalized = [0.0] * 6
+                if max_bar > 0:
+                    normalized = [round((value / max_bar) * 100, 1) for value in bar_values]
+                return normalized, round(total_value, 2)
+
+            if recent_transactions:
+                bars, total_value = compute_volume_bars(
+                    recent_transactions,
+                    datetime.now() - timedelta(hours=24),
+                    4 * 60 * 60,
+                )
+                dashboard_analytics['trade_volume_bars'] = bars
+                dashboard_analytics['trade_volume_total'] = total_value
+
+            if not recent_transactions or dashboard_analytics['trade_volume_total'] <= 0:
+                cursor.execute(
+                    """
+                    SELECT amount, price, sold_price, type, timestamp
+                    FROM transactions
+                    WHERE user_id = %s AND timestamp >= (NOW() - INTERVAL 30 DAY)
+                    ORDER BY timestamp ASC
+                    """,
+                    (session['user_id'],)
+                )
+                month_transactions = cursor.fetchall() or []
+                if month_transactions:
+                    bars, total_value = compute_volume_bars(
+                        month_transactions,
+                        datetime.now() - timedelta(days=30),
+                        5 * 24 * 60 * 60,
+                    )
+                    dashboard_analytics['trade_volume_bars'] = bars
+                    dashboard_analytics['trade_volume_total'] = total_value
+                    dashboard_analytics['trade_volume_window_label'] = '30d'
 
             try:
                 cursor.execute("""
@@ -1296,6 +1520,8 @@ def dashboard():
         triggered_alerts=triggered_alerts,
         sold_transactions=sold_transactions,
         risk_analytics=risk_analytics,
+        dashboard_metrics=dashboard_metrics,
+        dashboard_analytics=dashboard_analytics,
         next_check_seconds=CHECK_INTERVAL
     )
 
