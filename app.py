@@ -20,6 +20,13 @@ from email.mime.multipart import MIMEMultipart
 import io
 import contextlib
 import traceback
+from decimal import Decimal
+from bson.decimal128 import Decimal128
+from bson.objectid import ObjectId
+try:
+    from pymongo import MongoClient
+except Exception:
+    MongoClient = None
 from risk_assessment_data import (
     FINANCIAL_CAPACITY_TEST,
     INVESTMENT_KNOWLEDGE_TEST,
@@ -95,6 +102,11 @@ db_config = {
     'database': 'crypto_tracker'
 }
 
+# MongoDB Configuration (used as a mirror while MySQL remains the primary runtime store)
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://127.0.0.1:27017/')
+MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'crypto_tracker')
+_mongo_client = None
+
 # CoinGecko API
 COINGECKO_API = "https://api.coingecko.com/api/v3"
 COINS_PER_PAGE = 20
@@ -114,6 +126,190 @@ def get_db_connection():
     except mysql.connector.Error as err:
         print(f"Database connection failed: {err}")
         return None
+
+
+def get_mongo_db():
+    """Return MongoDB handle if available; otherwise keep app functional without Mongo."""
+    global _mongo_client
+    if MongoClient is None:
+        return None
+    try:
+        if _mongo_client is None:
+            _mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
+        _mongo_client.admin.command('ping')
+        return _mongo_client[MONGO_DB_NAME]
+    except Exception as err:
+        print(f"MongoDB connection failed: {err}")
+        return None
+
+
+def _to_decimal128(value):
+    try:
+        return Decimal128(str(Decimal(str(value))))
+    except Exception:
+        return Decimal128("0")
+
+
+def mirror_user_to_mongo(mysql_user_id, username, email, password_hash, verification_code=None, verified=False):
+    db = get_mongo_db()
+    if db is None:
+        return
+
+    now = datetime.utcnow()
+    db.users.update_one(
+        {'mysql_user_id': int(mysql_user_id)},
+        {
+            '$set': {
+                'username': username,
+                'email': email,
+                'password': password_hash,
+                'verification_code': verification_code,
+                'verified': bool(verified),
+                'risk_tolerance': 'Medium',
+                'risk_score': 0,
+                'achievements': []
+            },
+            '$setOnInsert': {
+                'created_at': now,
+                'crypto_bucks': _to_decimal128(10000),
+                'tether_balance': _to_decimal128(0)
+            }
+        },
+        upsert=True
+    )
+
+
+def mirror_user_verification_to_mongo(email):
+    db = get_mongo_db()
+    if db is None:
+        return
+    db.users.update_one(
+        {'email': email},
+        {'$set': {'verified': True, 'verification_code': None}}
+    )
+
+
+def sync_user_balances_to_mongo(mysql_conn, mysql_user_id):
+    """Sync latest balances from MySQL users table to Mongo users collection."""
+    db = get_mongo_db()
+    if db is None:
+        return
+    try:
+        cur = mysql_conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT username, email, crypto_bucks, tether_balance, risk_tolerance, risk_score, verified, achievements, created_at FROM users WHERE id = %s",
+            (mysql_user_id,)
+        )
+        user = cur.fetchone()
+        cur.close()
+        if not user:
+            return
+
+        achievements = user.get('achievements')
+        if isinstance(achievements, str):
+            achievements = [a.strip() for a in achievements.split(',') if a.strip()]
+        elif achievements is None:
+            achievements = []
+
+        db.users.update_one(
+            {'mysql_user_id': int(mysql_user_id)},
+            {
+                '$set': {
+                    'username': user.get('username'),
+                    'email': user.get('email'),
+                    'crypto_bucks': _to_decimal128(user.get('crypto_bucks', 0)),
+                    'tether_balance': _to_decimal128(user.get('tether_balance', 0)),
+                    'risk_tolerance': user.get('risk_tolerance') or 'Medium',
+                    'risk_score': int(user.get('risk_score') or 0),
+                    'verified': bool(user.get('verified')),
+                    'achievements': achievements,
+                },
+                '$setOnInsert': {
+                    'created_at': user.get('created_at') or datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
+    except Exception as err:
+        print(f"Mongo user balance sync failed: {err}")
+
+
+def mirror_transaction_to_mongo(mysql_transaction_id, mysql_user_id, mysql_wallet_id, coin_id, amount, price, tx_type, sold_price=None, buy_transaction_id=None):
+    db = get_mongo_db()
+    if db is None:
+        return
+
+    try:
+        # Ensure user document exists and obtain ObjectId reference.
+        user_doc = db.users.find_one({'mysql_user_id': int(mysql_user_id)})
+        if user_doc is None:
+            user_insert = db.users.insert_one({
+                'mysql_user_id': int(mysql_user_id),
+                'username': f'user_{mysql_user_id}',
+                'email': f'user_{mysql_user_id}@local',
+                'password': '',
+                'crypto_bucks': _to_decimal128(0),
+                'tether_balance': _to_decimal128(0),
+                'risk_tolerance': 'Medium',
+                'risk_score': 0,
+                'verified': False,
+                'achievements': [],
+                'created_at': datetime.utcnow(),
+            })
+            user_id = user_insert.inserted_id
+        else:
+            user_id = user_doc['_id']
+
+        # Ensure wallet document exists and obtain ObjectId reference.
+        wallet_doc = db.wallets.find_one({
+            'mysql_wallet_id': int(mysql_wallet_id),
+            'mysql_user_id': int(mysql_user_id),
+        })
+        if wallet_doc is None:
+            wallet_insert = db.wallets.insert_one({
+                'mysql_wallet_id': int(mysql_wallet_id),
+                'mysql_user_id': int(mysql_user_id),
+                'user_id': user_id,
+                'name': f'Wallet {mysql_wallet_id}',
+                'created_at': datetime.utcnow(),
+            })
+            wallet_id = wallet_insert.inserted_id
+        else:
+            wallet_id = wallet_doc['_id']
+
+        buy_transaction_object_id = None
+        if buy_transaction_id is not None:
+            linked_buy = db.transactions.find_one({'mysql_transaction_id': int(buy_transaction_id)})
+            if linked_buy:
+                buy_transaction_object_id = linked_buy.get('_id')
+
+        update_doc = {
+            'mysql_transaction_id': int(mysql_transaction_id),
+            'mysql_user_id': int(mysql_user_id),
+            'mysql_wallet_id': int(mysql_wallet_id),
+            'user_id': user_id,
+            'wallet_id': wallet_id,
+            'coin_id': (coin_id or '').lower(),
+            'amount': _to_decimal128(amount),
+            'price': _to_decimal128(price),
+            'type': tx_type,
+            'timestamp': datetime.utcnow(),
+        }
+
+        if sold_price is not None:
+            update_doc['sold_price'] = _to_decimal128(sold_price)
+        if buy_transaction_object_id is not None:
+            update_doc['buy_transaction_id'] = buy_transaction_object_id
+        if buy_transaction_id is not None:
+            update_doc['buy_transaction_mysql_id'] = int(buy_transaction_id)
+
+        db.transactions.update_one(
+            {'mysql_transaction_id': int(mysql_transaction_id)},
+            {'$set': update_doc},
+            upsert=True,
+        )
+    except Exception as err:
+        print(f"Mongo transaction mirror failed: {err}")
 
 
 def ensure_watchlist_scenarios_table(conn):
@@ -870,8 +1066,11 @@ def register():
             verification_code = generate_verification_code()
             cursor.execute("INSERT INTO users (username, email, password, verification_code, verified) VALUES (%s, %s, %s, %s, 0)", 
                           (username, email, password, verification_code))
+            new_user_id = cursor.lastrowid
             cursor.execute("UPDATE users SET achievements = '' WHERE email = %s", (email,))
             conn.commit()
+            if new_user_id:
+                mirror_user_to_mongo(new_user_id, username, email, password, verification_code=verification_code, verified=False)
             flash(f"Verification code sent to {email}. Please verify.", "info")
             return redirect(url_for('verify', email=email))
         except mysql.connector.Error as err:
@@ -901,6 +1100,7 @@ def verify(email):
             if user:
                 cursor.execute("UPDATE users SET verified = 1, verification_code = NULL WHERE email = %s", (email,))
                 conn.commit()
+                mirror_user_verification_to_mongo(email)
                 flash("Account verified! Please log in.", "success")
                 return redirect(url_for('login'))
             flash("Invalid verification code.", "error")
@@ -1715,6 +1915,9 @@ def trade():
                                  (total_with_fee, session['user_id']))
                     cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
                                  (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
+                    inserted_tx_id = cursor.lastrowid
+                    if inserted_tx_id:
+                        mirror_transaction_to_mongo(inserted_tx_id, session['user_id'], wallet_id, coin_id, amount, current_price, 'buy')
                     flash(f"Successfully bought {amount} {coin_id} (Fee: ${trading_fee:.2f})", "success")
                 
                 else:
@@ -1733,6 +1936,9 @@ def trade():
                                  (total_with_fee, session['user_id']))
                     cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, %s)",
                                  (session['user_id'], wallet_id, coin_id, amount, current_price, 'buy'))
+                    inserted_tx_id = cursor.lastrowid
+                    if inserted_tx_id:
+                        mirror_transaction_to_mongo(inserted_tx_id, session['user_id'], wallet_id, coin_id, amount, current_price, 'buy')
                     flash(f"Successfully bought {amount} {coin_id} (Fee: ${trading_fee:.2f})", "success")
             
             elif action == 'sell':
@@ -1784,6 +1990,19 @@ def trade():
                     "INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type, sold_price, buy_transaction_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                     (session['user_id'], wallet_id, coin_id, amount, purchase_price, 'sell', current_price, buy_transaction_id)
                 )
+                inserted_tx_id = cursor.lastrowid
+                if inserted_tx_id:
+                    mirror_transaction_to_mongo(
+                        inserted_tx_id,
+                        session['user_id'],
+                        wallet_id,
+                        coin_id,
+                        amount,
+                        purchase_price,
+                        'sell',
+                        sold_price=current_price,
+                        buy_transaction_id=buy_transaction_id,
+                    )
                 profit = (current_price - purchase_price) * amount
                 net_profit = profit - trading_fee
                 flash(f"Successfully sold {amount} {coin_id} (Profit: ${profit:.2f}, Fee: ${trading_fee:.2f}, Net: ${net_profit:.2f})", "success")
@@ -1842,6 +2061,7 @@ def trade():
             flash(f"{order_type.replace('_', ' ').title()} order placed successfully", "success")
         
         conn.commit()
+        sync_user_balances_to_mongo(conn, session['user_id'])
     except mysql.connector.Error as err:
         flash(f"Database error: {err}", "error")
         conn.rollback()
@@ -1886,7 +2106,11 @@ def portfolio():
                     cursor.execute("UPDATE users SET crypto_bucks = crypto_bucks - %s WHERE id = %s", (total_cost, session['user_id']))
                     cursor.execute("INSERT INTO transactions (user_id, wallet_id, coin_id, amount, price, type) VALUES (%s, %s, %s, %s, %s, 'buy')",
                                  (session['user_id'], wallet_id, coin_id, amount, purchase_price))
+                    inserted_tx_id = cursor.lastrowid
+                    if inserted_tx_id:
+                        mirror_transaction_to_mongo(inserted_tx_id, session['user_id'], wallet_id, coin_id, amount, purchase_price, 'buy')
                     conn.commit()
+                    sync_user_balances_to_mongo(conn, session['user_id'])
                     flash("Transaction added successfully", "success")
                 else:
                     flash("Insufficient CryptoBucks or invalid input", "error")
