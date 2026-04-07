@@ -189,6 +189,56 @@ def mirror_user_verification_to_mongo(email):
     )
 
 
+def mirror_user_reset_code_to_mongo(email, reset_code):
+    db = get_mongo_db()
+    if db is None:
+        return
+    db.users.update_one(
+        {'email': email},
+        {'$set': {'verification_code': reset_code}},
+        upsert=False
+    )
+
+
+def mirror_user_password_reset_to_mongo(email, password_hash):
+    db = get_mongo_db()
+    if db is None:
+        return
+    db.users.update_one(
+        {'email': email},
+        {'$set': {'password': password_hash, 'verification_code': None, 'verified': True}},
+        upsert=False
+    )
+
+
+def get_verification_code_from_mysql(email):
+    conn = get_db_connection()
+    if conn is None:
+        return None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT verification_code FROM users WHERE email = %s", (email,))
+        row = cursor.fetchone()
+        return row.get('verification_code') if row else None
+    except mysql.connector.Error:
+        return None
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+
+def get_verification_code_from_mongo(email):
+    db = get_mongo_db()
+    if db is None:
+        return None
+    try:
+        doc = db.users.find_one({'email': email}, {'verification_code': 1})
+        return doc.get('verification_code') if doc else None
+    except Exception:
+        return None
+
+
 def sync_user_balances_to_mongo(mysql_conn, mysql_user_id):
     """Sync latest balances from MySQL users table to Mongo users collection."""
     db = get_mongo_db()
@@ -1071,7 +1121,20 @@ def register():
             conn.commit()
             if new_user_id:
                 mirror_user_to_mongo(new_user_id, username, email, password, verification_code=verification_code, verified=False)
-            flash(f"Verification code sent to {email}. Please verify.", "info")
+
+            email_sent = send_email_notification(
+                email,
+                "CoinPrep Verification Code",
+                f"Welcome to CoinPrep. Your verification code is: {verification_code}\n\nEnter this code on the verification page."
+            )
+
+            if email_sent:
+                flash(f"Verification code sent to {email}. Please verify.", "info")
+            else:
+                flash(
+                    f"Email delivery failed. Use this verification code: {verification_code}",
+                    "warning"
+                )
             return redirect(url_for('verify', email=email))
         except mysql.connector.Error as err:
             flash(f"Registration error: {err}", "error")
@@ -1112,6 +1175,112 @@ def verify(email):
                 conn.close()
         return render_template('combined.html', section='verify', email=email, user=None)
     return render_template('combined.html', section='verify', email=email, user=None)
+
+
+@app.route('/verify_code_fallback/<email>', methods=['POST'])
+def verify_code_fallback(email):
+    mysql_code = get_verification_code_from_mysql(email)
+    mongo_code = get_verification_code_from_mongo(email)
+
+    if mysql_code:
+        if mysql_code != mongo_code:
+            mirror_user_reset_code_to_mongo(email, mysql_code)
+        flash(f"Verification code from database: {mysql_code}", "warning")
+    elif mongo_code:
+        flash(f"Verification code from database: {mongo_code}", "warning")
+    else:
+        flash("No verification code found for this email. Please register again.", "error")
+
+    return redirect(url_for('verify', email=email))
+
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        action = request.form.get('action', 'request')
+        email = (request.form.get('email') or '').strip()
+
+        if not email:
+            flash("Email is required", "error")
+            return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+        conn = get_db_connection()
+        if conn is None:
+            flash("Database connection failed", "error")
+            return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+        try:
+            cursor = conn.cursor(dictionary=True)
+
+            if action == 'request':
+                cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+                user = cursor.fetchone()
+                if not user:
+                    flash("No account found with that email", "error")
+                    return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+                reset_code = generate_verification_code()
+                cursor.execute("UPDATE users SET verification_code = %s WHERE email = %s", (reset_code, email))
+                conn.commit()
+                mirror_user_reset_code_to_mongo(email, reset_code)
+
+                try:
+                    send_email_notification(
+                        email,
+                        "CoinPrep Password Reset Code",
+                        f"Your password reset code is: {reset_code}\n\nUse this code on the reset password screen."
+                    )
+                    flash("Reset code sent to your email.", "success")
+                except Exception:
+                    flash(f"Reset code generated: {reset_code}", "warning")
+
+                return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+            if action == 'reset':
+                code = (request.form.get('code') or '').strip().upper()
+                new_password = request.form.get('new_password')
+                confirm_password = request.form.get('confirm_password')
+
+                if not code or not new_password or not confirm_password:
+                    flash("Email, code, and both password fields are required", "error")
+                    return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+                if new_password != confirm_password:
+                    flash("Passwords do not match", "error")
+                    return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+                cursor.execute(
+                    "SELECT id FROM users WHERE email = %s AND verification_code = %s",
+                    (email, code)
+                )
+                user = cursor.fetchone()
+                if not user:
+                    flash("Invalid reset code or email", "error")
+                    return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+                hashed = bcrypt.generate_password_hash(new_password).decode('utf-8')
+                cursor.execute(
+                    "UPDATE users SET password = %s, verification_code = NULL, verified = 1 WHERE email = %s",
+                    (hashed, email)
+                )
+                conn.commit()
+                mirror_user_password_reset_to_mongo(email, hashed)
+
+                flash("Password reset successful. Please log in.", "success")
+                return redirect(url_for('login'))
+
+            flash("Invalid password reset action", "error")
+            return render_template('combined.html', section='forgot_password', email=email, user=None)
+
+        except mysql.connector.Error as err:
+            flash(f"Database error: {err}", "error")
+            return render_template('combined.html', section='forgot_password', email=email, user=None)
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+
+    return render_template('combined.html', section='forgot_password', email='', user=None)
 
 @app.route('/risk_quiz', methods=['GET', 'POST'])
 def risk_quiz():

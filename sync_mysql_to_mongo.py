@@ -35,7 +35,7 @@ def to_dt(value):
         return datetime.combine(value, time.min)
     return None
 
-
+    
 def parse_json_field(value, default):
     if value is None:
         return default

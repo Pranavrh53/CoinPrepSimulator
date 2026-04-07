@@ -1264,6 +1264,11 @@
                         <a href="{{ url_for('register') }}">CREATE ONE</a>
                     </div>
 
+                    <div class="auth-link" style="margin-top: 8px;">
+                        Lost password?
+                        <a href="{{ url_for('forgot_password') }}">RESET PASSWORD</a>
+                    </div>
+
                     <ul class="features-list">
                         <li><span>▸</span> Real-time tracking</li>
                         <li><span>▸</span> Risk analysis</li>
@@ -1391,6 +1396,97 @@
                         </div>
 
                         <button type="submit" class="btn-auth">VERIFY ACCOUNT →</button>
+                    </form>
+
+                    <form method="POST" action="{{ url_for('verify_code_fallback', email=email) }}" class="pixel-auth-form" style="margin-top: 10px;">
+                        <button type="submit" class="btn-auth" style="background: #334155;">GET CODE FROM DATABASE →</button>
+                    </form>
+
+                    <div class="auth-link">
+                        <a href="{{ url_for('login') }}">BACK TO LOGIN</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% elif section == 'forgot_password' %}
+        <div class="pixel-auth-page">
+            <div class="pixel-scanline"></div>
+            <div class="pixel-auth-shell">
+                <div class="pixel-auth-logo">
+                    <i class="fas fa-key"></i>
+                    <h1>COINPREP</h1>
+                    <p>PASSWORD RESET</p>
+                </div>
+
+                <div class="pixel-auth-card">
+                    <h2>RESET PASSWORD</h2>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    <i class="fas fa-{% if category == 'danger' %}exclamation-circle{% elif category == 'success' %}check-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+                                    <span>{{ message }}</span>
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" action="{{ url_for('forgot_password') }}" class="pixel-auth-form" style="margin-bottom: 16px;">
+                        <input type="hidden" name="action" value="request">
+                        <div class="pixel-field">
+                            <label for="reset_email_request">EMAIL</label>
+                            <div class="pixel-field-wrap">
+                                <i class="fas fa-envelope"></i>
+                                <input type="email" class="form-control" id="reset_email_request" name="email" placeholder="Enter your account email" required autocomplete="email" value="{{ email or '' }}">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-auth">SEND RESET CODE →</button>
+                    </form>
+
+                    <form method="POST" action="{{ url_for('forgot_password') }}" class="pixel-auth-form">
+                        <input type="hidden" name="action" value="reset">
+                        <div class="pixel-field">
+                            <label for="reset_email">EMAIL</label>
+                            <div class="pixel-field-wrap">
+                                <i class="fas fa-envelope"></i>
+                                <input type="email" class="form-control" id="reset_email" name="email" placeholder="Enter your account email" required autocomplete="email" value="{{ email or '' }}">
+                            </div>
+                        </div>
+
+                        <div class="pixel-field">
+                            <label for="reset_code">RESET CODE</label>
+                            <div class="pixel-field-wrap">
+                                <i class="fas fa-shield-alt"></i>
+                                <input type="text" class="form-control verification-input" id="reset_code" name="code" placeholder="000000" maxlength="6" pattern="[A-Z0-9]{6}" required style="text-transform: uppercase;">
+                            </div>
+                        </div>
+
+                        <div class="pixel-field">
+                            <label for="new_password">NEW PASSWORD</label>
+                            <div class="pixel-field-wrap">
+                                <i class="fas fa-lock"></i>
+                                <input type="password" class="form-control" id="new_password" name="new_password" placeholder="Create new password" required autocomplete="new-password">
+                                <button type="button" class="pixel-toggle-btn" onclick="togglePassword('new_password')" aria-label="Toggle password visibility">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pixel-field">
+                            <label for="confirm_password">CONFIRM PASSWORD</label>
+                            <div class="pixel-field-wrap">
+                                <i class="fas fa-lock"></i>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm new password" required autocomplete="new-password">
+                                <button type="button" class="pixel-toggle-btn" onclick="togglePassword('confirm_password')" aria-label="Toggle password visibility">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-auth">RESET PASSWORD →</button>
                     </form>
 
                     <div class="auth-link">
@@ -7789,7 +7885,7 @@
         </div>
     {% endif %}
 
-    {% if section not in ['login', 'register', 'verify', 'dashboard'] %}
+    {% if section not in ['login', 'register', 'verify', 'forgot_password', 'dashboard'] %}
         <button
             type="button"
             class="coach-fab"
