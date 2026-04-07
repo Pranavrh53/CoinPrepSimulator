@@ -1,0 +1,22 @@
+{% extends "combined.html" %}
+
+{% block title %}Backtester{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-danger m-3">
+    <h4>Error loading backtester:</h4>
+    <pre>{{ error }}</pre>
+</div>
+{% endif %}
+
+<div class="container-fluid p-2 p-md-3">
+    <iframe
+        title="Lovable Backtester"
+        src="{{ url_for('backtester_app_assets', asset_path='backtester') }}"
+        style="width: 100%; height: calc(100vh - 130px); border: 0; background: #0b1220;"
+        loading="eager"
+        referrerpolicy="no-referrer"
+    ></iframe>
+</div>
+{% endblock %}
